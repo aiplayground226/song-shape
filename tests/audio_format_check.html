@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Song Shape audio format check</title>
+</head>
+<body>
+  <pre id="out">running…</pre>
+  <script src="../js/strokes.js"></script>
+  <script>
+    async function loadBytes(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(url + " fetch failed " + res.status);
+      return res.arrayBuffer();
+    }
+    (async () => {
+      const out = document.getElementById("out");
+      const SS = window.SongShape;
+      const msg = SS.WAV_ONLY_MESSAGE;
+      try {
+        const wavBuf = await loadBytes("../demo/fictional_tone.wav");
+        const mp3Buf = await loadBytes("../demo/fictional_tone.mp3");
+        SS.validateWavAudio("fictional_tone.wav", wavBuf);
+        let mp3Err = null;
+        try { SS.validateWavAudio("fictional_tone.mp3", mp3Buf); } catch (e) { mp3Err = e; }
+        let disguised = null;
+        try { SS.validateWavAudio("disguised.wav", mp3Buf); } catch (e) { disguised = e; }
+        const ok = SS.isRiffWaveHeader(wavBuf) &&
+          mp3Err && mp3Err.message === msg &&
+          disguised && disguised.message === msg &&
+          !SS.isSupportedAudioFile({ name: "fictional_tone.mp3", type: "audio/mpeg" }) &&
+          SS.isSupportedAudioFile({ name: "fictional_tone.wav", type: "audio/wav" });
+        const result = {
+          ok: ok,
+          wavHeader: SS.isRiffWaveHeader(wavBuf),
+          wavBytes: wavBuf.byteLength,
+          mp3Rejected: mp3Err && mp3Err.message,
+          disguisedRejected: disguised && disguised.message
+        };
+        window.__audioFormatResult = result;
+        out.textContent = JSON.stringify(result, null, 2);
+        document.title = ok ? "AUDIO_FORMAT_OK" : "AUDIO_FORMAT_FAIL";
+      } catch (err) {
+        window.__audioFormatResult = { ok: false, error: String(err) };
+        out.textContent = String(err && err.stack || err);
+        document.title = "AUDIO_FORMAT_FAIL";
+      }
+    })();
+  </script>
+</body>
+</html>

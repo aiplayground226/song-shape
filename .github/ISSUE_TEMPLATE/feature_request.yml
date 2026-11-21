@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest an improvement or a new idea.
+title: "[Idea]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task or problem, in your words.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: input
+    id: version
+    attributes:
+      label: Song Shape version you use
+      placeholder: v0.2.9

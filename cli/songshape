@@ -1,0 +1,4 @@
+#!/bin/sh
+# Convenience wrapper. From the project root: ./cli/songshape draft examples/sine_sweep.wav
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec node "$DIR/songshape.js" "$@"

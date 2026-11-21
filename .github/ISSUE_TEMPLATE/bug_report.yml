@@ -1,0 +1,82 @@
+name: Bug report
+description: Something in Song Shape doesn't work as expected.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Fixes are made by the maintainers on `main` (we don't merge pull requests from forks), and reporters of fixed bugs are credited in CHANGELOG.md.
+        **Please don't attach copyrighted audio or lyrics you don't have the right to share.**
+  - type: input
+    id: version
+    attributes:
+      label: Song Shape version
+      description: From the app footer ("Release v0.2.9") or `node cli/songshape.js --help`.
+      placeholder: v0.2.9
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it happen?
+      options:
+        - Browser app (index.html / Start-SongShape.cmd)
+        - Browser app via Serve-Local
+        - Command line (cli/songshape.js)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS and browser, or OS and Node.js version. For AI stages, the provider and model (never paste API keys).
+      placeholder: Windows 11, Chrome 131 / Node 22, Ollama + model name
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps from opening the app or the exact command you ran.
+      placeholder: |
+        1. Open the app and click Load demo MP3
+        2. Paste the lyrics below into Your replacement lyrics
+        3. Click Run all
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Include any error text. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: lyrics
+    attributes:
+      label: Lyrics sample
+      description: The few lines that trigger the problem (original and/or replacement lyrics), exactly as pasted. Only text you are allowed to share.
+      render: text
+  - type: textarea
+    id: song
+    attributes:
+      label: Song / audio sample
+      description: Attach a short clip you have the rights to (a few seconds), or the exported project.json / QUALITY_CHECK.json, or say which demo file reproduces it (e.g. demo/fictional_tone.wav).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed API keys and personal data from anything I pasted or attached.
+          required: true
+        - label: Any audio or lyrics I attached are mine or I have the right to share them.
+          required: true

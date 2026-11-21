@@ -1,0 +1,16 @@
+# Dependencies for the optional browser checks (never committed)
+node_modules/
+package-lock.json
+# Output folders from local runs
+my-first-run/
+out/
+*.log
+# OS / editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+# Secrets must never be committed
+.env
+.env.*
