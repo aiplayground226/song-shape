@@ -4,9 +4,9 @@ The style prompt describes the sound and does not name the artist.
 
 ========== Ready-to-paste AI request ==========
 
-Here is an example of public song “What Color Is My Honor?” sung by Peter Thiel.
+Here is an example of public song “What Color Is My Honor?” sung by Aeonid Thiel.
 
-Reference: public song “What Color Is My Honor?” sung by Peter Thiel.
+Reference: public song “What Color Is My Honor?” sung by Aeonid Thiel.
 This is a manual Song Shape trace of perceived vocal delivery relative to that singer's baseline, with the original lyrics pinned to the performance. Height is not measured pitch.
 
 Phrase 1 [Verse]: 0.00–1.80 s, direction up, start y=-0.35, peak y=0.15, end y=0.15. Words: “They marked me in red,”. Gap after: 300 ms.
