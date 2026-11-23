@@ -175,6 +175,8 @@ function buildPerformanceMap(input, options) {
     if (selected.some(isUnconfirmedAi)) review.push('ai_drafted_trace_not_confirmed');
     if (info.anchors.some(a => a.source === 'cpu_energy_timing_estimate')) review.push('energy_based_word_times_are_not_forced_alignment');
     if (info.anchors.some(a => a.needs_review)) review.push('source_anchor_association_marked_for_review');
+    // v0.2.11 fix7: real placement problems reported by the aligner import (low confidence, weak line, long gaps).
+    if (info.anchors.some(a => (typeof a.confidence === 'number' && a.confidence < LOW_CONFIDENCE) || (Array.isArray(a.review_flags) && a.review_flags.length))) review.push('low_confidence_word_placement');
     const lineWords = words.filter(w => w.line_id === info.line.id);
     if (lineWords.some(w => !info.anchors.some(a => a.word_id === w.id))) review.push('some_reference_words_unanchored');
     const segments = selected.map(s => clipStroke(s, start, end)).filter(Boolean);
@@ -189,7 +191,10 @@ function buildPerformanceMap(input, options) {
     return {id: 'group-' + info.line.id, line_id: info.line.id, text: info.line.text,
       start_ms: start, end_ms: end, word_ids: lineWords.map(w => w.id), anchor_ids: info.anchors.map(a => a.id),
       stroke_ids: [...new Set(segments.map(s => s.id))], stroke_segments: segments,
-      events, review_reasons: review, source: 'lyric_line_group', harmony: info.anchors.some(a => a.harmony) || !!(SS.lineHasHarmony && SS.lineHasHarmony(session, info.line.id))};
+      events, review_reasons: review, source: 'lyric_line_group', harmony: info.anchors.some(a => a.harmony) || !!(SS.lineHasHarmony && SS.lineHasHarmony(session, info.line.id)),
+      // v0.2.11 fix6e: detected harmony regions (hints) this line overlaps; words inside them
+      detected_harmony: (session.detected_harmony || []).filter(r => r.start_ms < end && r.end_ms > start).map(r => r.id),
+      harmony_word_ids: info.anchors.filter(a => (session.detected_harmony || []).some(r => a.start_ms >= r.start_ms && a.start_ms <= r.end_ms)).flatMap(a => a.word_ids && a.word_ids.length ? a.word_ids : [a.word_id])};
   });
   if (session.draft && session.draft.accepted && !strokes.some(s =>
     (s.annotations || []).includes('machine_measured_pitch_draft'))) {
@@ -207,7 +212,7 @@ function buildPerformanceMap(input, options) {
       baseline: clone(session.baseline), gap_cause_default: 'unknown',
       ai_strokes: {total: allStrokes.filter(isAiStroke).length, unconfirmed: unconfirmedAi.length, unconfirmed_excluded: excludeAi}},
     reference_lyrics: clone(session.lyrics), words: clone(words), anchors: clone(anchors),
-    performer: clone(session.performer), raw_strokes: clone(allStrokes), raw_gaps: clone(session.gaps || []),
+    performer: clone(session.performer), detected_harmony: clone(session.detected_harmony || []), vocal_range: session.vocal_range ? clone(session.vocal_range) : null, raw_strokes: clone(allStrokes), raw_gaps: clone(session.gaps || []),
     measured_draft: session.draft ? clone(session.draft) : null,
     groups, unassigned_stroke_ids: unassigned, export_heuristics: opts, warnings};
 }
@@ -216,21 +221,36 @@ function parseNewLyrics(text) {
   if (typeof text !== 'string' || text.length > 100000) throw new Error('New lyrics must be a string of at most 100,000 characters.');
   return SS.parseLyrics(text);
 }
-function buildTransfer(map, newTextRaw) {
-  // v0.2.9: incoming [bracket] tags and (performance cues) are ignored; only Song Shape's tags are output.
-  const cleaning = SS.cleanLyricInput ? SS.cleanLyricInput(String(newTextRaw == null ? '' : newTextRaw)) : null;
-  const newText = cleaning ? cleaning.text : newTextRaw;
-  const parsed = parseNewLyrics(newText);
-  const lyrics = parsed.lines.filter(l => l.kind !== 'blank' && l.kind !== 'tag');
-  const refs = map.groups;
-  const warnings = map.warnings.slice();
-  if (refs.length !== lyrics.length) warnings.push('Different line counts: proportional line mapping is a draft, not exact syllable alignment.');
-  const weights = lyrics.map(l => Math.max(1, parsed.words.filter(w => w.line_id === l.id).length));
+const INFO_REASONS = ['trace_gap_is_not_proof_of_vocal_silence', 'machine_measured_pitch_is_not_human_delivery',
+  'some_strokes_assigned_by_time_not_explicit_link', 'stroke_clipped_for_line_view_raw_source_retained',
+  // v0.2.11 fix7: every machine-placed word (aligner, CPU estimate, taps) is an estimate. That caveat is stated once
+  // for the whole export, so on its own it no longer marks every line needs_review.
+  'energy_based_word_times_are_not_forced_alignment', 'source_anchor_association_marked_for_review'];
+// v0.2.11 fix7: a new line may differ from its reference line by a few words; beyond this it is a real fit problem.
+function wordCountTolerance(refCount) { return Math.max(1, Math.round(0.35 * Math.max(0, refCount || 0))); }
+function wordCountBeyondTolerance(refCount, targetCount) { return Math.abs((refCount || 0) - (targetCount || 0)) > wordCountTolerance(refCount); }
+const LOW_CONFIDENCE = 0.3;
+/** Per line: the word count of its run of consecutive lines that share exactly the same reference ids. */
+function splitRunWords(idLists, counts) {
+  const key = ids => ids.length ? ids.join('|') : null;
+  const out = counts.slice();
+  for (let i = 0; i < idLists.length;) {
+    let j = i + 1;
+    const k = key(idLists[i]);
+    while (k && j < idLists.length && key(idLists[j]) === k) j++;
+    const total = counts.slice(i, j).reduce((a, b) => a + b, 0);
+    for (let n = i; n < j; n++) out[n] = total;
+    i = j;
+  }
+  return out;
+}
+// v0.2.11 fix6: spread lines over reference groups (1:1 when the counts match, else proportional by word count).
+function distributeLines(lyrics, weights, refs) {
   const refWeights = refs.map(g => Math.max(1, g.word_ids.length));
   const sum = a => a.reduce((x, y) => x + y, 0);
   const total = sum(weights) || 1, refTotal = sum(refWeights) || 1;
   let consumed = 0;
-  const rows = lyrics.map((line, i) => {
+  return lyrics.map((line, i) => {
     let candidates;
     if (refs.length === lyrics.length) candidates = refs[i] ? [refs[i]] : [];
     else {
@@ -239,11 +259,58 @@ function buildTransfer(map, newTextRaw) {
       candidates = refs.filter((g, j) => { const a = cursor / refTotal; cursor += refWeights[j]; const b = cursor / refTotal; return a < right && b > left; });
     }
     consumed += weights[i];
-    const mismatch = candidates.length !== 1 || (candidates[0] && candidates[0].word_ids.length !== weights[i]);
-    const uncertain = candidates.some(g => g.review_reasons.some(r => r !== 'trace_gap_is_not_proof_of_vocal_silence'));
+    return candidates;
+  });
+}
+function buildTransfer(map, newTextRaw, transferOpts) {
+  // v0.2.9: incoming [bracket] tags and (performance cues) are ignored; only Song Shape's tags are output.
+  const cleaning = SS.cleanLyricInput ? SS.cleanLyricInput(String(newTextRaw == null ? '' : newTextRaw)) : null;
+  const newText = cleaning ? cleaning.text : newTextRaw;
+  const parsed = parseNewLyrics(newText);
+  const lyrics = parsed.lines.filter(l => l.kind !== 'blank' && l.kind !== 'tag');
+  const refs = map.groups;
+  const warnings = map.warnings.slice();
+  if (refs.length !== lyrics.length && !(transferOpts && transferOpts.blockGroups)) warnings.push('Different line counts: proportional line mapping is a draft, not exact syllable alignment.');
+  const weights = lyrics.map(l => Math.max(1, parsed.words.filter(w => w.line_id === l.id).length));
+  // v0.2.11 fix6 (Extend): with blockGroups, each lyric block (section) maps only onto its own reference groups.
+  const blockGroups = transferOpts && Array.isArray(transferOpts.blockGroups) ? transferOpts.blockGroups : null;
+  let lineCandidates;
+  if (blockGroups) {
+    const blockOf = []; let b = -1;
+    for (const l of parsed.lines) {
+      if (l.kind === 'tag') { b += 1; continue; }
+      if (l.kind === 'blank') continue;
+      if (b < 0) b = 0;
+      blockOf.push(b);
+    }
+    lineCandidates = new Array(lyrics.length);
+    // Blocks of the same section (blockSection) share one proportional mapping over that section's groups.
+    const blockSection = Array.isArray(transferOpts.blockSection) ? transferOpts.blockSection : null;
+    const keyOf = b => blockSection && blockSection[b] != null ? blockSection[b] : 'b' + b;
+    const keys = [...new Set(blockOf.map(keyOf))];
+    for (const key of keys) {
+      const idx = blockOf.map((x, i) => keyOf(x) === key ? i : -1).filter(i => i >= 0);
+      const ids = blockGroups[blockOf[idx[0]]] || [];
+      const sub = ids.map(id => refs.find(g => g.id === id)).filter(Boolean);
+      const got = distributeLines(idx.map(i => lyrics[i]), idx.map(i => weights[i]), sub);
+      idx.forEach((i, n) => { lineCandidates[i] = got[n]; });
+    }
+  } else lineCandidates = distributeLines(lyrics, weights, refs);
+  // v0.2.11 fix7: consecutive lines on exactly the same reference line(s) are one sung line the user split
+  // (e.g. "What color / is my / honor?"); their word count is compared as a whole.
+  const runWords = splitRunWords(lineCandidates.map(c => (c || []).map(g => g.id)), weights);
+  const rows = lyrics.map((line, i) => {
+    const candidates = lineCandidates[i] || [];
+    const refCount = candidates.reduce((n, g) => n + g.word_ids.length, 0);
+    const differs = candidates.length !== 1 || (candidates[0] && candidates[0].word_ids.length !== weights[i]);
+    // v0.2.11 fix7: only a word-count difference beyond the tolerance is a problem; a small one is a fit note.
+    // A problem only when neither the line alone nor its split run fits the reference line(s).
+    const mismatch = !!candidates.length && wordCountBeyondTolerance(refCount, weights[i]) && wordCountBeyondTolerance(refCount, runWords[i]);
+    // v0.2.11: provenance notes (machine contour, time-assigned strokes, clipped strokes, gaps) are not review problems.
+    const uncertain = candidates.some(g => g.review_reasons.some(r => INFO_REASONS.indexOf(r) < 0));
     return {line_id: line.id, text: line.text, reference_group_ids: candidates.map(g => g.id),
       word_alignment: 'not_computed', status: mismatch || uncertain || !candidates.length ? 'needs_review' : 'line_level_draft',
-      reasons: [...(mismatch ? ['word_or_line_count_mismatch'] : []), ...(uncertain ? ['reference_group_needs_review'] : []), ...(!candidates.length ? ['no_reference_group'] : [])],
+      reasons: [...(mismatch ? ['word_or_line_count_mismatch'] : differs && candidates.length ? ['word_count_differs_within_tolerance'] : []), ...(uncertain ? ['reference_group_needs_review'] : []), ...(!candidates.length ? ['no_reference_group'] : [])],
       // Reference times remain reference times; no target-audio timestamps exist.
       reference_events: candidates.flatMap(g => g.events.map(e => Object.assign({reference_group_id: g.id}, clone(e))))};
   });
@@ -270,7 +337,8 @@ function exportDirections(map, transfer) {
     if (groups.some(g => g.harmony)) out.push('[Backing harmony supports the lead; no lead handoff]');
     out.push(line.text);
   }
-  const style = 'One consistent lead vocal identity: ' + identity.replace(/\s+/g, ' ').trim() +
+  // v0.2.11: the identity is written once, in the [Global Vocal Direction] line of the lyrics.
+  const style = 'One consistent lead singer throughout (see the Global Vocal Direction line).' +
     '\nFollow the line-level delivery contours as original performance suggestions, not an exact melody copy.' +
     '\nInstrumentation, genre, tempo, and voice character beyond the chosen identity are user choices, not detected facts.';
   return {lyrics: out.join('\n'), style,
@@ -292,7 +360,7 @@ function aiPayload(map, transfer, includeReferenceText) {
 
 const api = {PERFORMANCE_MAP_VERSION: VERSION, PERFORMANCE_MAP_DEFAULTS: DEFAULTS,
   simplify, clipStroke, strokeEvents, groupEvents,
-  buildPerformanceMap, buildTransfer, exportDirections, aiPayload};
+  buildPerformanceMap, buildTransfer, exportDirections, aiPayload, REVIEW_INFO_REASONS: INFO_REASONS, wordCountTolerance, wordCountBeyondTolerance, splitRunWords};
 root.SongShape = Object.assign(root.SongShape || {}, api);
 if (typeof module !== 'undefined' && module.exports) module.exports = Object.assign(SS, api);
 

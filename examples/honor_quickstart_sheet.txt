@@ -1,0 +1,9 @@
+# honor (quick-start)
+[Global Vocal Direction: One consistent lead singer for all sung passages; same vocal timbre, character, and diction throughout. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.]
+
+[Chorus]
+(start softly)
+[Rising pitch]
+honor
+
+Suno (and similar generators) do not guarantee that bracketed cues will be followed. Tags and parenthetical directions are suggestions, not promised control over pitch, harmony, timing, or who sings. The same lead identity is written once; harmony cues are added only where you marked backing harmony under that lead.

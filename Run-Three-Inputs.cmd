@@ -8,7 +8,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo Song Shape v0.2.9 - offline CPU analysis
+echo Song Shape v0.2.10 - offline CPU analysis
 echo.
 set /p "AUDIO=Full path to your lead WAV: "
 set /p "REF=Full path to known original lyrics TXT: "

@@ -11,7 +11,7 @@
 
   var SCHEMA_VERSION = "songshape-live-0.2";
   var SCHEMA_VERSION_V01 = "songshape-live-0.1";
-  var APP_VERSION = "0.2.9";
+  var APP_VERSION = "0.2.11-dev";
   var MIN_POINT_SPACING_MS = 8;
   var MAX_TIME_JUMP_MS = 200;
   var MAX_TIME_MS = 24 * 60 * 60 * 1000;
@@ -146,12 +146,16 @@
       gaps: [],
       lyrics: { text: "", lines: [], words: [] },
       replacement_lyrics: "", // kept separate from reference lyric tokens
+      extend_lyrics: "", // v0.2.11 fix6b: Step 2 (your song with [New ...] sections added), kept separately
       anchors: [],
       draft: null,
       reference: { title: "", artist: "" },
       active_word_id: null,
       place_parentheses: false,
       harmony_ranges: [],
+      vocal_range: null, // v0.2.11 fix6f: the lead singer's measured range; the Singer baseline is its midpoint
+      detected_harmony: [], // v0.2.11 fix6e: harmony regions found in the vocal stem / overlapping lines (hints only)
+      line_taps: [],
       performer: {
         identity:
           "One consistent lead singer for all sung passages; same vocal timbre, character, and diction throughout. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.",
@@ -559,7 +563,13 @@
       needs_review: !!(a && a.needs_review),
       harmony: !!(a && a.harmony),
       source: sanitizeLabel(a && a.source, MAX_STRING_LEN) || "next_word",
-      group_id: a && a.group_id ? sanitizeLabel(a.group_id, MAX_STRING_LEN) : null
+      group_id: a && a.group_id ? sanitizeLabel(a.group_id, MAX_STRING_LEN) : null,
+      // v0.2.11: optional machine signal (consonant trigger) time and the rule used for the word start.
+      signal_ms: a && isFiniteNumber(a.signal_ms) && a.signal_ms >= 0 ? Math.round(a.signal_ms) : null,
+      anchor_rule: a && a.anchor_rule ? sanitizeLabel(a.anchor_rule, 60) : null,
+      tap_anchored: !!(a && a.tap_anchored),
+      confidence: a && isFiniteNumber(a.confidence) && a.confidence >= 0 && a.confidence <= 1 ? a.confidence : null,
+      review_flags: a && Array.isArray(a.review_flags) ? a.review_flags.slice(0, 12).map(function (s) { return sanitizeLabel(s, 80); }).filter(Boolean) : []
     };
   }
 
@@ -570,6 +580,7 @@
       y_semantics: "measured_pitch_relative_to_estimated_baseline",
       y_units: "normalized_octaves_around_median_f0",
       baseline_hz: isFiniteNumber(draft.baseline_hz) && draft.baseline_hz >= 0 ? draft.baseline_hz : 0,
+      baseline_from: draft.baseline_from === "vocal_range_midpoint" || draft.baseline_from === "fixed" ? draft.baseline_from : "median_f0",
       strokes: (draft.strokes || []).slice(0, MAX_STROKES).map(exportStroke),
       gaps: (draft.gaps || []).slice(0, MAX_GAPS).map(exportGap),
       accepted: !!draft.accepted
@@ -607,6 +618,7 @@
       gaps: (src.gaps || []).slice(0, MAX_GAPS).map(exportGap),
       lyrics: exportLyrics(src.lyrics),
       replacement_lyrics: keepMultiline(src.replacement_lyrics || "", MAX_LYRICS_CHARS),
+      extend_lyrics: keepMultiline(src.extend_lyrics || "", MAX_LYRICS_CHARS),
       anchors: (src.anchors || []).slice(0, MAX_ANCHORS).map(exportAnchor),
       draft: exportDraft(src.draft),
       reference: {
@@ -616,9 +628,33 @@
       active_word_id: src.active_word_id ? sanitizeLabel(src.active_word_id, MAX_STRING_LEN) : null,
       place_parentheses: !!src.place_parentheses,
       harmony_ranges: exportHarmonyRanges(src.harmony_ranges),
+      detected_harmony: exportDetectedHarmony(src.detected_harmony),
+      vocal_range: exportVocalRange(src.vocal_range),
+      line_taps: exportLineTaps(src.line_taps),
       performer: exportPerformer(src.performer),
       notes: sanitizeLabel(src.notes, MAX_NOTES_LEN)
     };
+  }
+
+
+  // v0.2.11 fix5: tapped line starts ({line_id, t_ms, raw_ms} or {line_id, skipped: true}).
+  function exportLineTaps(taps) {
+    if (!Array.isArray(taps)) return [];
+    return taps.slice(0, MAX_LINES).filter(function (t) { return t && typeof t.line_id === "string"; }).map(function (t) {
+      if (t.skipped) return { line_id: sanitizeLabel(t.line_id, MAX_STRING_LEN), skipped: true };
+      return { line_id: sanitizeLabel(t.line_id, MAX_STRING_LEN), t_ms: Math.max(0, Math.min(MAX_TIME_MS, Math.round(Number(t.t_ms) || 0))),
+        raw_ms: Math.max(0, Math.min(MAX_TIME_MS, Math.round(Number(t.raw_ms) || 0))) };
+    });
+  }
+  function parseLineTaps(arr) {
+    if (arr == null) return [];
+    var src = requireArray(arr, "line_taps", MAX_LINES);
+    return src.map(function (t, i) {
+      requirePlainObject(t, "line_taps[" + i + "]");
+      var id = requireString(t.line_id, "line_taps[" + i + "].line_id", MAX_STRING_LEN);
+      if (t.skipped) return { line_id: id, skipped: true };
+      return { line_id: id, t_ms: requireTimeMs(t.t_ms, "line_taps[" + i + "].t_ms"), raw_ms: t.raw_ms == null ? requireTimeMs(t.t_ms, "line_taps[" + i + "].t_ms") : requireTimeMs(t.raw_ms, "line_taps[" + i + "].raw_ms") };
+    });
   }
 
   function exportHarmonyRanges(ranges) {
@@ -633,6 +669,42 @@
         start_ms: start,
         end_ms: end
       });
+    });
+    return out;
+  }
+
+  // v0.2.11 fix6f: measured lead range (numbers and note names only).
+  function exportVocalRange(r) {
+    if (!r || typeof r !== "object" || Array.isArray(r)) return null;
+    var n = function (v, lo, hi) { return typeof v === "number" && isFinite(v) && v >= lo && v <= hi ? Math.round(v * 100) / 100 : null; };
+    var note = function (v) { return typeof v === "string" && /^[A-G]#?-?\d{1,2}$/.test(v) ? v : null; };
+    var low = n(r.low_hz, 20, 5000), high = n(r.high_hz, 20, 5000), base = n(r.baseline_hz, 20, 5000);
+    if (low == null || high == null || base == null || high < low) return null;
+    var ex = r.excluded && typeof r.excluded === "object" ? r.excluded : {};
+    var cnt = function (v) { return typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v) : 0; };
+    return { method: "percentiles_of_confident_lead_frames",
+      percentiles: Array.isArray(r.percentiles) && r.percentiles.length === 2 ? [n(r.percentiles[0], 0, 50) || 2, n(r.percentiles[1], 50, 100) || 98] : [2, 98],
+      low_hz: low, high_hz: high, baseline_hz: base, low_note: note(r.low_note), high_note: note(r.high_note), baseline_note: note(r.baseline_note),
+      low_midi: n(r.low_midi, 0, 140), high_midi: n(r.high_midi, 0, 140), baseline_midi: n(r.baseline_midi, 0, 140),
+      span_semitones: n(r.span_semitones, 0, 100), half_span_octaves: n(r.half_span_octaves, 0.01, 5) || Math.max(1 / 12, Math.log(high / low) / Math.log(2) / 2),
+      median_hz: n(r.median_hz, 20, 5000), frames_used: cnt(r.frames_used), frames_voiced: cnt(r.frames_voiced),
+      excluded: { harmony_regions: cnt(ex.harmony_regions), quiet: cnt(ex.quiet), unstable_or_isolated: cnt(ex.unstable_or_isolated), outlier_clusters: cnt(ex.outlier_clusters) },
+      harmony_regions_excluded: cnt(r.harmony_regions_excluded),
+      source: ["vocal_stem", "song_mix"].indexOf(r.source) >= 0 ? r.source : "vocal_stem",
+      register_bands: "fifths of the range: low < -0.6, lower-mid < -0.2, mid within \u00b10.2, upper-mid \u2264 0.6, high above (\u22121 = lowest note, +1 = highest note)" };
+  }
+
+  function exportDetectedHarmony(regions) {
+    var out = [];
+    if (!Array.isArray(regions)) return out;
+    regions.slice(0, MAX_SECTIONS).forEach(function (r, i) {
+      if (!r || typeof r !== "object") return;
+      var start = exportTime(r.start_ms, 0), end = exportTime(r.end_ms, start);
+      if (end < start) end = start;
+      var score = typeof r.score === "number" && isFinite(r.score) ? Math.max(0, Math.min(1, Math.round(r.score * 100) / 100)) : null;
+      out.push({ id: sanitizeLabel(r.id, MAX_STRING_LEN) || ("auto-harmony-" + (i + 1)), start_ms: start, end_ms: end, score: score,
+        reasons: (Array.isArray(r.reasons) ? r.reasons : []).slice(0, 4).map(function (x) { return sanitizeLabel(x, 80); }).filter(Boolean),
+        source: ["stem", "words", "stem+words"].indexOf(r.source) >= 0 ? r.source : "stem" });
     });
     return out;
   }
@@ -828,6 +900,20 @@
       }
       session.replacement_lyrics = keepMultiline(obj.replacement_lyrics, MAX_LYRICS_CHARS);
     }
+    if (obj.vocal_range != null) {
+      if (typeof obj.vocal_range !== "object" || Array.isArray(obj.vocal_range)) throw new Error("Invalid Song Shape file: vocal_range must be an object.");
+      session.vocal_range = exportVocalRange(obj.vocal_range);
+    }
+    if (obj.detected_harmony != null) {
+      if (!Array.isArray(obj.detected_harmony)) throw new Error("Invalid Song Shape file: detected_harmony must be a list.");
+      session.detected_harmony = exportDetectedHarmony(obj.detected_harmony);
+    }
+    if (obj.extend_lyrics != null) {
+      if (typeof obj.extend_lyrics !== "string" || obj.extend_lyrics.length > MAX_LYRICS_CHARS) {
+        throw new Error("Invalid Song Shape file: extend_lyrics exceeds the limit or is not text.");
+      }
+      session.extend_lyrics = keepMultiline(obj.extend_lyrics, MAX_LYRICS_CHARS);
+    }
     session.anchors = obj.anchors != null ? parseAnchorsBlock(obj.anchors) : [];
     session.draft = obj.draft != null ? parseDraftBlock(obj.draft) : null;
     if (obj.reference != null) {
@@ -840,6 +926,7 @@
     session.active_word_id = obj.active_word_id == null ? null : optionalString(obj.active_word_id, "active_word_id", MAX_STRING_LEN);
     session.place_parentheses = !!obj.place_parentheses;
     session.harmony_ranges = parseHarmonyRanges(obj.harmony_ranges);
+    session.line_taps = parseLineTaps(obj.line_taps);
     session.performer = parsePerformer(obj.performer);
     recomputeGaps(session);
     return session;
@@ -938,7 +1025,12 @@
         needs_review: !!a.needs_review,
         harmony: !!a.harmony,
         source: a.source == null ? "next_word" : requireString(a.source, "anchors[" + i + "].source", MAX_STRING_LEN) || "next_word",
-        group_id: a.group_id == null ? null : requireString(a.group_id, "anchors[" + i + "].group_id", MAX_STRING_LEN)
+        group_id: a.group_id == null ? null : requireString(a.group_id, "anchors[" + i + "].group_id", MAX_STRING_LEN),
+        signal_ms: a.signal_ms == null ? null : requireTimeMs(a.signal_ms, "anchors[" + i + "].signal_ms"),
+        anchor_rule: a.anchor_rule == null ? null : requireString(a.anchor_rule, "anchors[" + i + "].anchor_rule", 60),
+        tap_anchored: a.tap_anchored === true,
+        confidence: isFiniteNumber(a.confidence) && a.confidence >= 0 && a.confidence <= 1 ? a.confidence : null,
+        review_flags: Array.isArray(a.review_flags) ? a.review_flags.slice(0, 12).map(function (s) { return sanitizeLabel(s, 80); }).filter(Boolean) : []
       };
     });
   }
@@ -964,6 +1056,7 @@
       y_semantics: "measured_pitch_relative_to_estimated_baseline",
       y_units: "normalized_octaves_around_median_f0",
       baseline_hz: hz,
+      baseline_from: obj.baseline_from === "vocal_range_midpoint" || obj.baseline_from === "fixed" ? obj.baseline_from : "median_f0",
       strokes: strokes,
       gaps: gaps,
       accepted: !!obj.accepted

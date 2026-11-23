@@ -35,9 +35,9 @@ The top-level session is still a **manual listener trace** of perceived vocal de
 
 ## Examples
 
-- `demo/example_peak_break_pickup_nosedive.json` — a small hand-trace project: a peak, a break, a pickup and a nosedive.
-- `examples/automatic_demo/output/project.json` — a complete project written by the CPU chain from `demo/fictional_tone.wav`.
-- The same demo file is a v0.1-era trace and still imports under the current schema.
+- `examples/honor_quickstart.json` — one word (“honor”) owning several strokes, with an unlabeled gap.
+- `examples/honor_reference.json` — reference trace for the Map my lyrics sample.
+- `demo/example_peak_break_pickup_nosedive.json` — fictional v0.1 traces; still imports.
 
 ## Import validation
 
@@ -50,6 +50,8 @@ A file is accepted only if it parses as JSON, stays under 20 MB, and matches the
 Draft-origin strokes are marked with annotation tags `machine_measured_pitch_draft` and `machine-draft-fingerprint:<hex>`. These tags are metadata, not evidence of lead identity or human tracing.
 
 ## v0.2.5 auxiliary representations (session schema unchanged)
+
+**v0.2.11 vowel targeting:** `anchors[].signal_ms` (optional number) is the aligner's first-sound time; `start_ms` is then the vowel target. `anchors[].anchor_rule` (optional string: `phone_vowel`, `energy_vowel`, `letter_vowel`, `signal`) says which rule set `start_ms`. Both are kept on export/import; older readers ignore them.
 
 **Word anchor provenance:** `anchors[].source` may be `cpu_energy_timing_estimate` (waveform/syllable heuristic) or `imported_known_lyrics_alignment` (external word-time proposal). `anchors[].needs_review` preserves uncertainty. Existing manual anchors are never overwritten by automatic proposals; the user may explicitly confirm one in the browser. Imported model scores are not proof of actual alignment. All imported anchors require explicit human review before removing their `needs_review` flag.
 

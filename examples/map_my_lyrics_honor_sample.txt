@@ -1,0 +1,59 @@
+Song Shape v0.2 — sample “Map my lyrics” export
+Reference: public song “What Color Is My Honor?” (sample trace; fictional timing).
+The style prompt describes the sound and does not name the artist.
+
+========== Ready-to-paste AI request ==========
+
+Here is an example of public song “What Color Is My Honor?” sung by Peter Thiel.
+
+Reference: public song “What Color Is My Honor?” sung by Peter Thiel.
+This is a manual Song Shape trace of perceived vocal delivery relative to that singer's baseline, with the original lyrics pinned to the performance. Height is not measured pitch.
+
+Phrase 1 [Verse]: 0.00–1.80 s, direction up, start y=-0.35, peak y=0.15, end y=0.15. Words: “They marked me in red,”. Gap after: 300 ms.
+Phrase 2 [Verse]: 2.10–4.00 s, direction up, start y=0.10, peak y=0.70, end y=0.55. Words: “A badge of disgrace,”. Gap after: 1200 ms.
+Phrase 3 [Chorus]: 5.20–7.80 s, direction up, start y=-0.20, peak y=0.80, end y=0.75. Words: “What color is my honor?”. Gap after: 300 ms.
+Phrase 4 [Chorus]: 8.10–11.00 s, direction down, start y=0.70, peak y=0.70, end y=-0.35. Words: “I wear the red with honor.”.
+
+These are my lyrics:
+
+[Verse]
+I walk a different road,
+I keep my own name.
+
+[Chorus]
+What color is my promise?
+I wear the words I chose.
+
+Map my lyrics into a performance a Suno-style generator can use. Keep my words. Preserve my line breaks. Add short section tags and short delivery cues (such as start softly, rise, hold, break here, plunge, step down) that follow the example performance's rises, holds, drops, and gaps.
+
+The reference trace maps the lead singer only. Keep one consistent lead throughout. Do not imply a vocalist swap, duet, or choir handoff. If a reference phrase was marked as harmony with the lead, write a short backing-harmony cue under that same lead; otherwise leave the line as solo lead. Do not repeat the lead identity on every line — write it once as a global vocal direction.
+
+Also suggest a style prompt that gets a sound like this recording. Describe the sound (voice, arrangement, energy, dynamics). Do not name the artist.
+
+========== Rule-based sheet (no AI) ==========
+
+[Global Vocal Direction: One consistent bright, clean male lyric tenor throughout. Same vocal timbre, character, and diction. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.]
+
+[Verse]
+[Rising pitch]
+(start softly)
+(break here)
+I walk a different road,
+
+(break here)
+I keep my own name.
+
+[Chorus]
+[Rising pitch]
+(start softly)
+(break here)
+What color is my promise?
+
+[Pitch drop]
+I wear the words I chose.
+
+Style prompt template (describe the sound; do not name the artist):
+
+A vocal performance that often starts near a steady mid-range baseline; rises to clear peaks; leaves audible breaks between some phrases. Keep the words intelligible. Follow the tagged dynamics and pauses in the lyric sheet. Do not name a specific artist or recording in the style prompt.
+
+Suno (and similar generators) do not guarantee that bracketed cues will be followed. Tags and parenthetical directions are suggestions, not promised control over pitch, harmony, timing, or who sings. The same lead identity is written once; harmony cues are added only where you marked backing harmony under that lead.

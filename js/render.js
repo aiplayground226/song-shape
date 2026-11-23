@@ -100,9 +100,12 @@
       drawPlotGrid(L);
       drawLoop(L, currentTime, player);
       drawGaps(L, currentTime, session, offsetSec);
+      drawHarmony(L, currentTime, session, offsetSec);
       if (view.showDraft) drawDraft(L, currentTime, session, offsetSec);
       drawTraces(L, currentTime, session, recorder, offsetSec);
+      drawLineTaps(L, currentTime, session, offsetSec);
       drawAnchors(L, currentTime, session, offsetSec);
+      drawTapCue(L);
       drawPlayhead(L, currentTime, duration);
       drawEdgeLabels(L);
     }
@@ -235,7 +238,7 @@
       ctx.fillText("Expressive fall", p.x + 6, p.y + p.h - 6);
       ctx.textBaseline = "bottom";
       ctx.fillStyle = "#475569";
-      ctx.fillText("Singer baseline", p.x + 6, normToY(0, p) - 4);
+      ctx.fillText("Singer baseline" + (view.vocalRange && view.vocalRange.baseline_note ? " · " + view.vocalRange.baseline_note + " (range " + view.vocalRange.low_note + "–" + view.vocalRange.high_note + ")" : ""), p.x + 6, normToY(0, p) - 4);
     }
 
     function drawLoop(L, currentTime, player) {
@@ -509,6 +512,59 @@
       return "";
     }
 
+    function drawLineTaps(L, currentTime, session, offsetSec) {
+      var labels = {}; ((session.lyrics && session.lyrics.lines) || []).forEach(function (l) { labels[l.id] = l.text; });
+      ctx.save(); ctx.strokeStyle = "#9333ea"; ctx.fillStyle = "#7e22ce"; ctx.font = "11px ui-sans-serif, system-ui, sans-serif"; ctx.textAlign = "left";
+      var rowEnds = [-Infinity, -Infinity, -Infinity]; // close taps stack their labels in up to three rows
+      (session.line_taps || []).forEach(function (t) {
+        if (t.skipped || typeof t.t_ms !== "number") return;
+        var x = timeToX(t.t_ms / 1000 - (offsetSec || 0), currentTime, L);
+        if (x < L.plot.x || x > L.plot.x + L.plot.w) return;
+        ctx.globalAlpha = 0.8; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(x, L.plot.y); ctx.lineTo(x, L.plot.y + L.plot.h); ctx.stroke(); ctx.setLineDash([]);
+        var text = "Tap: " + String(labels[t.line_id] || "").slice(0, 30), w = ctx.measureText(text).width, row = 0;
+        while (row < rowEnds.length - 1 && rowEnds[row] > x) row++;
+        rowEnds[row] = x + w + 8;
+        ctx.globalAlpha = 1; ctx.fillText(text, x + 4, L.plot.y + 14 + row * 13);
+      }); ctx.restore();
+    }
+
+    // v0.2.11 fix6e: detected harmony regions (hints): a light purple band with a "harmony?" label.
+    function drawHarmony(L, currentTime, session, offsetSec) {
+      var regions = (session && session.detected_harmony) || [];
+      if (!regions.length) return;
+      ctx.save();
+      ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+      ctx.textBaseline = "top";
+      regions.forEach(function (r) {
+        var x0 = timeToX(r.start_ms / 1000 - offsetSec, currentTime, L), x1 = timeToX(r.end_ms / 1000 - offsetSec, currentTime, L);
+        if (x1 < L.plot.x || x0 > L.plot.x + L.plot.w) return;
+        x0 = Math.max(L.plot.x, x0); x1 = Math.min(L.plot.x + L.plot.w, x1);
+        ctx.globalAlpha = 0.07; ctx.fillStyle = "#7c3aed"; ctx.fillRect(x0, L.plot.y, x1 - x0, L.plot.h);
+        ctx.globalAlpha = 0.55; ctx.fillRect(x0, L.plot.y + L.plot.h - 30, x1 - x0, 3);
+        ctx.globalAlpha = 1; ctx.fillStyle = "#6d28d9";
+        if (x1 - x0 > 44) ctx.fillText("harmony?", x0 + 3, L.plot.y + L.plot.h - 42);
+      });
+      ctx.restore();
+    }
+    function inHarmony(session, a) {
+      var regions = (session && session.detected_harmony) || [];
+      for (var i = 0; i < regions.length; i++) if (a.start_ms >= regions[i].start_ms && a.start_ms <= regions[i].end_ms) return true;
+      return false;
+    }
+
+    // v0.2.11 fix6e: while tapping, the line to tap next is shown just above the word lane, at the playhead.
+    function drawTapCue(L) {
+      if (!view.tapNext) return;
+      ctx.save();
+      ctx.font = "bold 12px ui-sans-serif, system-ui, sans-serif";
+      ctx.textAlign = "left";
+      var text = "Next to tap: \u201c" + String(view.tapNext).slice(0, 60) + "\u201d", w = ctx.measureText(text).width + 14, x = playheadX(L) + 8, y = L.plot.y + L.plot.h - 62;
+      if (x + w > L.plot.x + L.plot.w) x = Math.max(L.plot.x + 2, playheadX(L) - w - 8);
+      ctx.fillStyle = "rgba(124,58,237,0.92)"; ctx.fillRect(x, y, w, 20);
+      ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(text, x + 7, y + 10);
+      ctx.restore();
+    }
+
     function drawAnchors(L, currentTime, session, offsetSec) {
       var anchors = (session && session.anchors) || [];
       if (!anchors.length) return;
@@ -516,7 +572,9 @@
       ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      anchors.forEach(function (a) {
+      // v0.2.11: labels that would overlap step up into up to four rows (left to right), so close words stay readable.
+      var rowEnds = [-Infinity, -Infinity, -Infinity, -Infinity];
+      anchors.slice().sort(function (p, q) { return p.start_ms - q.start_ms; }).forEach(function (a) {
         var x = timeToX(a.start_ms / 1000 - offsetSec, currentTime, L);
         if (x < L.plot.x - 40 || x > L.plot.x + L.plot.w + 40) return;
         var y = L.plot.y + L.plot.h - 8;
@@ -532,6 +590,10 @@
         ctx.closePath();
         ctx.globalAlpha = selected ? 1 : 0.92;
         ctx.fill();
+        if (inHarmony(session, a)) { // "H" badge: this word sits in a detected harmony region
+          ctx.save(); ctx.globalAlpha = 1; ctx.fillStyle = "#7c3aed"; ctx.beginPath(); ctx.arc(x + 7, y - 9, 5, 0, 2 * Math.PI); ctx.fill();
+          ctx.fillStyle = "#fff"; ctx.font = "bold 8px ui-sans-serif, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("H", x + 7, y - 9); ctx.restore();
+        }
         if (selected) {
           ctx.strokeStyle = "#0f172a";
           ctx.lineWidth = 1.5;
@@ -548,7 +610,15 @@
         if (label) {
           ctx.fillStyle = fill;
           ctx.globalAlpha = 1;
-          ctx.fillText(label, x, y - 12);
+          var half = ctx.measureText(label).width / 2 + 2;
+          var row = 0;
+          while (row < rowEnds.length - 1 && x - half < rowEnds[row]) row += 1;
+          rowEnds[row] = Math.max(rowEnds[row], x + half);
+          if (row) {
+            ctx.strokeStyle = fill; ctx.globalAlpha = 0.35; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x, y - 10); ctx.lineTo(x, y - 12 - row * 13 + 2); ctx.stroke(); ctx.globalAlpha = 1;
+          }
+          ctx.fillText(label, x, y - 12 - row * 13);
         }
       });
       ctx.restore();

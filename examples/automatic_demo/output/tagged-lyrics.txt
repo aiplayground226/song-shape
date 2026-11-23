@@ -1,10 +1,11 @@
 [Global Vocal Direction: One consistent lead singer for all sung passages; same vocal timbre, character, and diction throughout. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.]
 
 [Verse]
-[Delivery: rising line; upper-mid register; powerful; peak on "me"]
+[Delivery: begin below baseline; rise on "river"; rise on "calls"; hold on "me"]
 The river calls me
-[Delivery: falling line; mid register; steady intensity; peak on "Home"; dive at the end]
+[Delivery: begin above baseline; descend on "Home"; descend on "through"; dip below baseline on "the"; descend on "storm"]
 Home through the storm
+
 
 [Style prompt]
 One consistent lead vocal identity: One consistent lead singer for all sung passages; same vocal timbre, character, and diction throughout. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.

@@ -40,7 +40,7 @@ test("v0.1 files still import under the v0.2 schema", () => {
 
 test("parseLyrics keeps line breaks and section tags, and sequential place/skip/line/undo works", () => {
   const session = SS.createSession();
-  const text = "[Verse]\nThey kept me in light,\nA small and steady flame,\n\n[Chorus]\nWhat shape is my promise?";
+  const text = "[Verse]\nThey marked me in red,\nA badge of disgrace,\n\n[Chorus]\nWhat color is my honor?";
   SS.setLyrics(session, text);
   assert.ok(session.lyrics.text.indexOf("\n") >= 0);
   const kinds = session.lyrics.lines.map((l) => l.kind);
@@ -48,7 +48,7 @@ test("parseLyrics keeps line breaks and section tags, and sequential place/skip/
   assert.strictEqual(SS.nextWord(session).text, "They");
   const a1 = SS.placeNextWord(session, { start_ms: 500, end_ms: 900, stroke_id: "stroke-1", source: "next_word" });
   assert.strictEqual(a1.word_id, "word-1");
-  assert.strictEqual(SS.nextWord(session).text, "kept");
+  assert.strictEqual(SS.nextWord(session).text, "marked");
   SS.skipNextWord(session);
   assert.strictEqual(SS.nextWord(session).text, "me");
   const linePlaced = SS.placeNextLine(session, { start_ms: 1000, end_ms: 2000, stroke_id: "stroke-1" });
@@ -98,9 +98,9 @@ test("malicious or invalid anchors and lyrics are rejected", () => {
   }), /finite number/i);
 });
 
-test("lyric sheet keeps line breaks and adds short line-directed cues", () => {
+test("lyric sheet keeps line breaks and adds short Honor-style cues", () => {
   const session = SS.createSession();
-  SS.setLyrics(session, "[Verse]\nThey kept me in light,\nA small and steady flame,\n\n[Chorus]\nWhat shape is my promise?");
+  SS.setLyrics(session, "[Verse]\nThey marked me in red,\nA badge of disgrace,\n\n[Chorus]\nWhat color is my honor?");
   session.strokes = [{
     id: "stroke-1",
     start_ms: 0,
@@ -114,15 +114,15 @@ test("lyric sheet keeps line breaks and adds short line-directed cues", () => {
   const sheet = SS.buildLyricSheet(session);
   assert.ok(sheet.text.indexOf("[Verse]") >= 0);
   assert.ok(sheet.text.indexOf("[Chorus]") >= 0);
-  assert.ok(sheet.text.indexOf("They kept me in light,") >= 0);
+  assert.ok(sheet.text.indexOf("They marked me in red,") >= 0);
   assert.ok(/\n\n/.test(sheet.text), "blank line preserved");
   assert.ok(/start softly|\[Rising pitch\]|\(rise\)/.test(sheet.text));
 });
 
 test("Map my lyrics aligns new lines to reference phrases and builds a paste-ready request", () => {
   const session = SS.createSession();
-  session.reference = { title: "Lantern Song", artist: "A public performer" };
-  SS.setLyrics(session, "They kept me in light,\nA small and steady flame,");
+  session.reference = { title: "What Color Is My Honor", artist: "A public performer" };
+  SS.setLyrics(session, "They marked me in red,\nA badge of disgrace,");
   session.strokes = [
     { id: "stroke-1", start_ms: 0, end_ms: 1500, points: [[0, -0.3], [1500, 0.8]], annotations: [], section: "Verse" },
     { id: "stroke-2", start_ms: 2000, end_ms: 3500, points: [[2000, 0.7], [3500, -0.5]], annotations: [], section: "Verse" }
@@ -138,11 +138,11 @@ test("Map my lyrics aligns new lines to reference phrases and builds a paste-rea
   assert.ok(!/A public performer/.test(mapped.stylePrompt), "style prompt must not name the artist");
   const request = SS.buildMapRequest(session, mine);
   assert.ok(/Here is an example of public song/.test(request));
-  assert.ok(/Lantern Song/.test(request));
+  assert.ok(/What Color Is My Honor/.test(request));
   assert.ok(/These are my lyrics/.test(request));
   assert.ok(/I walk a different road/.test(request));
   assert.ok(/Do not name the artist/.test(request));
-  assert.ok(/They kept me in light/.test(request));
+  assert.ok(/They marked me in red/.test(request));
 });
 
 test("pitch detector tracks a synthetic sine sweep upward", () => {
@@ -201,7 +201,7 @@ test("AI output is validated and secrets never appear in exports", () => {
 
 test("Place-word and Trace are separate: ending a stroke never consumes the next lyric", () => {
   const session = SS.createSession();
-  SS.setLyrics(session, "lantern shown clearly");
+  SS.setLyrics(session, "honor shown clearly");
   const rec = SS.createRecorder();
   SS.startStroke(session, rec, 0, -0.2);
   SS.addPoint(session, rec, 200, 0.1);
@@ -209,7 +209,7 @@ test("Place-word and Trace are separate: ending a stroke never consumes the next
   const stroke = SS.endStroke(session, rec, 500);
   assert.ok(stroke);
   assert.strictEqual(session.anchors.length, 0, "tracing must not place a word");
-  assert.strictEqual(SS.nextWord(session).text, "lantern");
+  assert.strictEqual(SS.nextWord(session).text, "honor");
   assert.strictEqual(stroke.word_id, null, "unassigned when no active word");
 
   const a = SS.placeNextWord(session, { start_ms: 0, end_ms: 0 });
@@ -236,7 +236,7 @@ test("Place-word and Trace are separate: ending a stroke never consumes the next
   assert.ok(undone.length >= 1);
   assert.strictEqual(session.strokes.length, beforeStrokes, "undo word keeps strokes");
   assert.ok(session.strokes.every((s) => s.word_id === null));
-  assert.strictEqual(SS.nextWord(session).text, "lantern");
+  assert.strictEqual(SS.nextWord(session).text, "honor");
 
   SS.placeNextWord(session, { start_ms: 0, end_ms: 0 });
   SS.assignStrokeToWord(session, hold.id, session.active_word_id);
@@ -247,13 +247,13 @@ test("Place-word and Trace are separate: ending a stroke never consumes the next
 
 test("drag keeps token identity and marks associations for review when they no longer overlap", () => {
   const session = SS.createSession();
-  SS.setLyrics(session, "lantern");
+  SS.setLyrics(session, "honor");
   const a = SS.placeNextWord(session, { start_ms: 100, end_ms: 400 });
   session.strokes = [{ id: "stroke-1", start_ms: 100, end_ms: 400, points: [[100, 0], [400, 0.2]], annotations: [], word_id: a.word_id }];
   SS.assignStrokeToWord(session, "stroke-1", a.word_id);
   const moved = SS.moveAnchor(session, a.id, 2000, 2300);
   assert.strictEqual(moved.word_id, a.word_id);
-  assert.strictEqual(session.lyrics.words[0].text, "lantern");
+  assert.strictEqual(session.lyrics.words[0].text, "honor");
   assert.strictEqual(moved.needs_review, true);
 });
 
@@ -280,25 +280,25 @@ test("performer lock: sheet writes the lead once and never implies a vocalist sw
   assert.ok(!/\bduet\b|choir handoff|now a different singer|swap(?:ping)? (?:the )?vocalist|hand(?:s|ed) off/i.test(afterDirection));
   assert.ok(sheet.text.indexOf(SS.harmonyCue(session)) < 0, "unmarked lines must not grow a harmony cue");
   // Default identity is generic — not a hardcoded named singer.
-  assert.ok(/^One consistent lead singer/.test(session.performer.identity) && !/\b(tenor|baritone|soprano|alto)\b/i.test(session.performer.identity));
+  assert.ok(!/Cain|Thiel|Freddie/i.test(session.performer.identity));
 });
 
-test("Harmony Then Solo (sample) harmony-then-solo: same lead throughout", () => {
-  // Worked example (times approximate): at ~1:45 the line
-  // "we sing this line together" is a harmonized group with the lead;
-  // at ~1:49+ "and then I sing alone" is solo lead. Export keeps the
+test("Lantern harmony-then-solo: same lead throughout", () => {
+  // Worked example (times approximate): at ~0:45 the line
+  // "who keeps the lantern burning" is a harmonized group with the lead;
+  // at ~0:49+ "burning into the night" is solo lead. Export keeps the
   // same lead on both lines. Harmony is backing, never a handoff.
   const session = SS.createSession();
-  session.reference = { title: "Harmony Then Solo (sample)", artist: "" };
+  session.reference = { title: "Keep The Lantern Burning", artist: "" };
   session.performer.identity = "One consistent bright, clean male lyric tenor throughout. Same vocal timbre, character, and diction. Intensity and register may vary; no unexpected additional singer, duet, or choir handoff.";
-  SS.setLyrics(session, "we sing this line together\nand then I sing alone");
+  SS.setLyrics(session, "who keeps the lantern burning\nburning into the night");
   session.strokes = [
-    { id: "stroke-harmony", start_ms: 105000, end_ms: 108800, points: [[105000, 0.1], [106500, 0.45], [108800, 0.2]], annotations: [], section: "Bridge" },
-    { id: "stroke-solo", start_ms: 109000, end_ms: 113000, points: [[109000, 0.15], [113000, 0.1]], annotations: [], section: "Bridge" }
+    { id: "stroke-harmony", start_ms: 45000, end_ms: 48800, points: [[45000, 0.1], [46500, 0.45], [48800, 0.2]], annotations: [], section: "Bridge" },
+    { id: "stroke-solo", start_ms: 49000, end_ms: 53000, points: [[49000, 0.15], [53000, 0.1]], annotations: [], section: "Bridge" }
   ];
   SS.recomputeGaps(session);
-  const harm = SS.placeNextLine(session, { start_ms: 105000, end_ms: 108800, stroke_id: "stroke-harmony" });
-  const solo = SS.placeNextLine(session, { start_ms: 109000, end_ms: 113000, stroke_id: "stroke-solo" });
+  const harm = SS.placeNextLine(session, { start_ms: 45000, end_ms: 48800, stroke_id: "stroke-harmony" });
+  const solo = SS.placeNextLine(session, { start_ms: 49000, end_ms: 53000, stroke_id: "stroke-solo" });
   assert.ok(harm.length >= 1);
   assert.ok(solo.length >= 1);
   SS.setHarmonyOnLine(session, harm[0].line_id, true);
@@ -309,13 +309,13 @@ test("Harmony Then Solo (sample) harmony-then-solo: same lead throughout", () =>
   const cue = SS.harmonyCue(session);
   assert.ok(/same lead tenor, backing harmony joins under him/.test(cue));
   assert.ok(sheet.text.indexOf(cue) >= 0);
-  assert.ok(/we sing this line together/.test(sheet.text));
-  assert.ok(/and then I sing alone/.test(sheet.text));
+  assert.ok(/who keeps the lantern burning/.test(sheet.text));
+  assert.ok(/burning into the night/.test(sheet.text));
   assert.ok(/\[Global Vocal Direction:/.test(sheet.text));
   assert.ok(/male lyric tenor/.test(sheet.text));
 
-  const harmAt = sheet.text.indexOf("we sing this line together");
-  const soloAt = sheet.text.indexOf("and then I sing alone");
+  const harmAt = sheet.text.indexOf("who keeps the lantern burning");
+  const soloAt = sheet.text.indexOf("burning into the night");
   const cueAt = sheet.text.indexOf(cue);
   assert.ok(harmAt >= 0 && soloAt > harmAt);
   assert.ok(cueAt >= 0 && cueAt < harmAt, "harmony cue belongs with the marked line");
@@ -329,12 +329,12 @@ test("Harmony Then Solo (sample) harmony-then-solo: same lead throughout", () =>
 
   const json = SS.sessionToJSON(session);
   assert.ok(json.anchors.some((a) => a.harmony === true));
-  assert.ok(json.anchors.some((a) => a.harmony === false && a.start_ms >= 109000));
+  assert.ok(json.anchors.some((a) => a.harmony === false && a.start_ms >= 49000));
   const reloaded = SS.parseSession(json);
   const again = SS.buildLyricSheet(reloaded);
   assert.ok(again.text.indexOf(cue) >= 0);
-  assert.ok(/and then I sing alone/.test(again.text));
-  assert.ok(again.text.indexOf(cue, again.text.indexOf("we sing this line together")) < 0);
+  assert.ok(/burning into the night/.test(again.text));
+  assert.ok(again.text.indexOf(cue, again.text.indexOf("who keeps the lantern burning")) < 0);
 });
 
 test("gaps stay unlabeled and Map my lyrics keeps the performer lock", () => {
@@ -407,10 +407,10 @@ test("CLI WAV reader rejects non-WAV audio and accepts a RIFF/WAVE file", () => 
 
 test("inline bracket cues are never placed as words and stay in the exported line", () => {
   const session = SS.createSession();
-  SS.setLyrics(session, "What shape is my [hold] promise\n[pause: 1 bar] We held on\nStart [rise] the [hold] fire");
+  SS.setLyrics(session, "What color is my [hold] honor\n[pause: 1 bar] They marked me\nStart [rise] the [hold] fire");
   assert.deepStrictEqual(
     session.lyrics.words.map((w) => w.text),
-    ["What", "shape", "is", "my", "promise", "We", "held", "on", "Start", "the", "fire"]
+    ["What", "color", "is", "my", "honor", "They", "marked", "me", "Start", "the", "fire"]
   );
   assert.ok(session.lyrics.words.every((w) => !/\[/.test(w.text)));
   assert.ok(session.lyrics.lines[0].text.indexOf("[hold]") >= 0);
@@ -422,8 +422,8 @@ test("inline bracket cues are never placed as words and stay in the exported lin
   assert.strictEqual(SS.nextWord(session).text, "What");
   while (SS.nextWord(session)) SS.placeNextWord(session, { start_ms: 0, end_ms: 0 });
   const sheet = SS.buildLyricSheet(session);
-  assert.ok(sheet.text.indexOf("What shape is my [hold] promise") >= 0);
-  assert.ok(sheet.text.indexOf("[pause: 1 bar] We held on") >= 0);
+  assert.ok(sheet.text.indexOf("What color is my [hold] honor") >= 0);
+  assert.ok(sheet.text.indexOf("[pause: 1 bar] They marked me") >= 0);
   assert.ok(sheet.text.indexOf("Start [rise] the [hold] fire") >= 0);
   // A line that is only cues becomes kind "tag" and is still exported in place.
   SS.setLyrics(session, "[Verse]\n[hold]");
@@ -482,18 +482,18 @@ test("Map my lyrics word counts ignore inline bracket cues", () => {
   assert.strictEqual(adlib.wordCount, 0);
 
   const session = SS.createSession();
-  SS.setLyrics(session, "They kept me in light,");
+  SS.setLyrics(session, "They marked me in red,");
   session.strokes = [{ id: "s1", start_ms: 0, end_ms: 1000, points: [[0, 0], [1000, 0.2]], annotations: [] }];
   SS.placeNextLine(session, { start_ms: 0, end_ms: 1000, stroke_id: "s1" });
-  const mapped = SS.buildMappedSheet(session, "What shape is my [hold] promise");
-  assert.ok(mapped.text.indexOf("What shape is my [hold] promise") >= 0);
+  const mapped = SS.buildMappedSheet(session, "What color is my [hold] honor");
+  assert.ok(mapped.text.indexOf("What color is my [hold] honor") >= 0);
 });
 
 test("no-audio draft plan returns the visible message and view-only defaults", () => {
   const planned = SS.planDraftJob({ hasAudio: false });
   assert.strictEqual(planned.ok, false);
   assert.strictEqual(planned.message, SS.NO_AUDIO_DRAFT_MESSAGE);
-  assert.strictEqual(planned.message, "Load a local .wav first, then build a draft from the decoded audio.");
+  assert.strictEqual(planned.message, "Open audio (.wav or .mp3) first, then build a draft from the decoded audio.");
   assert.strictEqual(planned.highlightOpen, true);
 
   const region = SS.planDraftJob({

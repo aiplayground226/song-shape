@@ -8,6 +8,7 @@
   var r2 = function (v) { return Math.round(v * 100) / 100; };
   var finite = Number.isFinite;
   var STEP_MS = 50;
+  var RESTRAINED_MARGIN = 0.04; // octaves below the baseline the line peak must stay for "restrained"
   var MAX_CUES = 8; // the stage-4 checker allows at most 8 cues per [Delivery: ...] tag
 
   /** The vocabulary, by dimension, in the order cues are written. Shared with SONG_SHAPE_AI_CONTEXT.md. */
@@ -130,11 +131,14 @@
     else if (f.end - f.start >= 0.25) c.direction = "rising";
     else if (f.start - f.end >= 0.25) c.direction = "falling";
     else c.direction = "level";
-    c.register = f.mean >= 0.45 ? "high" : f.mean >= 0.15 ? "upper" : f.mean > -0.15 ? "mid" : f.mean > -0.45 ? "lower" : "low";
+    // v0.2.11 fix6f: with a measured vocal range, register is the line's place in that range (fifths).
+    if (typeof f.register_pos === "number" && isFinite(f.register_pos)) c.register = f.register_pos >= 0.6 ? "high" : f.register_pos >= 0.2 ? "upper" : f.register_pos > -0.2 ? "mid" : f.register_pos > -0.6 ? "lower" : "low";
+    else c.register = f.mean >= 0.45 ? "high" : f.mean >= 0.15 ? "upper" : f.mean > -0.15 ? "mid" : f.mean > -0.45 ? "lower" : "low";
     if (f.max >= 0.75) c.dynamics = "powerful";
     else if (c.direction === "rising" && f.end >= 0.35) c.dynamics = "building";
     else if (f.mean <= -0.4) c.dynamics = "soft";
-    else if (f.max <= 0) c.dynamics = "restrained";
+    // v0.2.11 fix7: a small margin so lines that just touch the baseline do not flip between restrained and steady.
+    else if (f.max <= -RESTRAINED_MARGIN) c.dynamics = "restrained";
     else c.dynamics = "steady";
     if (f.hold_ms >= 1500) c.sustain = "long"; else if (f.hold_ms >= 700) c.sustain = "held";
     if (f.max >= 0.5 && f.max - f.mean >= 0.3) c.emphasis = "peak";
@@ -158,6 +162,19 @@
     return w ? String(w.word).replace(/["\\\[\]]/g, "") : null;
   }
 
+  // v0.2.11: a peak or held note is named on a content word, not "a"/"the"/"my" (the next content word, else the previous one).
+  var FUNCTION_WORDS = ["a","an","the","of","to","in","on","at","and","or","but","is","my","your","our","for","with","as","by","it"];
+  function contentWordAt(words, rel) {
+    var w = wordAt(words, rel);
+    if (!w || FUNCTION_WORDS.indexOf(w.toLowerCase().replace(/[^a-z']/g, "")) < 0) return w;
+    var i = words.findIndex(function (x, k) { return rel >= x.relative_start && (rel < x.relative_end || k === words.length - 1); });
+    var clean = function (x) { return String(x.word).replace(/["\\\[\]]/g, ""); };
+    var isContent = function (x) { return FUNCTION_WORDS.indexOf(clean(x).toLowerCase().replace(/[^a-z']/g, "")) < 0; };
+    for (var k = i + 1; k < words.length; k++) if (isContent(words[k])) return clean(words[k]);
+    for (k = i - 1; k >= 0; k--) if (isContent(words[k])) return clean(words[k]);
+    return w;
+  }
+
   /**
    * CPU delivery cues for one line. features from lineFeatures; words = projected target words
    * [{word, relative_start, relative_end}] used only to anchor "peak on" / "held note on".
@@ -171,11 +188,11 @@
     cues.push(V.register[c.register]);
     cues.push(V.dynamics[c.dynamics]);
     if (c.sustain) {
-      var hw = wordAt(words, features.hold_rel != null ? features.hold_rel : null);
+      var hw = contentWordAt(words, features.hold_rel != null ? features.hold_rel : null);
       cues.push(V.sustain[c.sustain] + (hw ? ' on "' + hw + '"' : ""));
     }
     if (c.emphasis) {
-      var pw = wordAt(words, features.peak_rel != null ? features.peak_rel : features.peak_pos);
+      var pw = contentWordAt(words, features.peak_rel != null ? features.peak_rel : features.peak_pos);
       if (pw) cues.push(V.emphasis.peak + ' "' + pw + '"');
     }
     if (c.contour_detail) cues.push(V.contour_detail[c.contour_detail]);
@@ -186,6 +203,11 @@
   }
 
   var KEYS = ["mean", "start", "end", "max", "min", "range", "peak_pos"];
+  // v0.2.10: repeat tolerance 0.7 (was 0.15). Calibrated on 8 real songs (7 + Honor clip, RoFormer rip +
+  // forced alignment): 0.15 matched 0 of 66 repeated-line pairs. 0.7 is the largest value that matched no
+  // differently-sung pair (syllable pitch r < 0.5). The next differently-sung pair sits at 0.80, and many sit at 1.0
+  // (one extra phrase break). Same-sung pairs (r >= 0.9) start at 0.59.
+  var REPEAT_TOLERANCE = 0.7;
   /** Distance between two feature sets (0 = identical). Holds/breaks count too. */
   function featureDistance(a, b) {
     if (!a || !b) return Infinity;
@@ -201,7 +223,7 @@
    * adds repeat_of). Lines with a different contour keep their own cues.
    */
   function applyRepeatConsistency(rows, tolerance) {
-    var tol = tolerance == null ? 0.15 : tolerance;
+    var tol = tolerance == null ? REPEAT_TOLERANCE : tolerance;
     var norm = function (s) { return String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(); };
     rows.forEach(function (row, i) {
       row.repeat_of = null;
@@ -219,6 +241,8 @@
   var api = {
     CPU_TAG_VOCABULARY: VOCABULARY,
     CPU_TAG_MAX_CUES: MAX_CUES,
+    CPU_TAG_REPEAT_TOLERANCE: REPEAT_TOLERANCE,
+    CPU_TAG_RESTRAINED_MARGIN: RESTRAINED_MARGIN,
     lineFeatures: lineFeatures,
     classifyLineFeatures: classify,
     cpuLineCues: cpuLineCues,

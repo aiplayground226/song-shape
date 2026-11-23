@@ -1,4 +1,4 @@
-/* Song Shape v0.2.9: lyric input rules. Users paste lyrics; nothing is fetched.
+/* Song Shape v0.2.9-v0.2.10: lyric input rules. Users paste lyrics; nothing is fetched.
    Incoming [bracket] tags and clear (parenthetical) performance cues are stripped and
    ignored. Song Shape writes its own section tags from the structure (blank lines),
    and its own delivery tags from the measured contour. No network, no dependencies. */
@@ -35,6 +35,27 @@
     if (cue) return "ambiguous";
     return "lyric";
   }
+  // v0.2.10: a dash standing alone between spaces (-, –, —, or a run such as --) is not a word and
+  // breaks word timing. Song Shape does not guess: it asks the user to remove it. Hyphenated words stay.
+  var DASH_ONLY = /^[-\u2010\u2011\u2012\u2013\u2014\u2015\u2212]+$/;
+  var STANDALONE_DASH_HINT = "Leave out standalone dashes (-, \u2013, \u2014): they break word timing. Hyphenated words such as well-known are fine.";
+  /** Lines (1-based) that contain a standalone dash, ignoring [bracket] tags. [{line, text}] */
+  function findStandaloneDashes(input) {
+    var out = [];
+    String(input == null ? "" : input).replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n").forEach(function (raw, idx) {
+      var line = raw.replace(/\[[^\]]*\]/g, " ").replace(/\[[^\]]*$/, " ");
+      var toks = line.split(/\s+/).filter(Boolean);
+      if (toks.some(function (t) { return DASH_ONLY.test(t); })) out.push({ line: idx + 1, text: raw.trim().slice(0, 80) });
+    });
+    return out;
+  }
+  function standaloneDashError(found, label) {
+    var lines = found.map(function (f) { return f.line; });
+    var e = new Error((label ? label + ": " : "") + "Remove the standalone dash" + (lines.length > 1 ? "es" : "") + " on line" + (lines.length > 1 ? "s " : " ") +
+      lines.slice(0, 8).join(", ") + (lines.length > 8 ? ", \u2026" : "") + " (for example: \"" + found[0].text + "\"). " + STANDALONE_DASH_HINT);
+    e.code = "SONG_SHAPE_STANDALONE_DASH"; e.lines = lines;
+    return e;
+  }
   function normLine(s) { return String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(); }
 
   /**
@@ -46,10 +67,14 @@
     if (input == null) input = "";
     if (typeof input !== "string") throw new Error("Lyrics must be text.");
     if (input.length > 100000) throw new Error("Lyrics must be at most 100,000 characters.");
+    var dashes = findStandaloneDashes(input);
+    if (dashes.length) throw standaloneDashError(dashes);
     var src = input.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
     var ignored = [], stripped = [], ambiguous = [];
-    var blocks = [], cur = [];
-    function flush() { if (cur.length) blocks.push(cur); cur = []; }
+    var blocks = [], cur = [], headers = [], pendingHeader = null, curHeader = null;
+    // v0.2.11 fix6: the whole-line [tag] just before a block is kept as that block's header (for Extend marks
+    // such as [New Verse]); it is never written to the output.
+    function flush() { if (cur.length) { blocks.push(cur); headers.push(curHeader); } cur = []; curHeader = null; }
     src.split("\n").forEach(function (raw, idx) {
       var line = raw;
       var wholeTag = /^\s*\[[^\]]*\]\s*$/.test(line);
@@ -63,15 +88,32 @@
         return m;
       });
       line = line.replace(/\s+/g, " ").trim();
-      if (wholeTag || !line) { if (wholeTag || !raw.trim()) flush(); return; }
+      if (wholeTag || !line) { if (wholeTag || !raw.trim()) flush(); if (wholeTag) pendingHeader = raw.trim().slice(0, 120); return; }
+      if (!cur.length) { curHeader = pendingHeader; pendingHeader = null; }
       cur.push(line);
     });
     flush();
-    // Section names come from structure only: a block whose lines repeat elsewhere is the chorus.
+    // Section names come from structure only: a block that repeats elsewhere is the chorus.
+    // v0.2.11: "repeats" ignores punctuation, ellipses and sung hyphens ("ho-nor" = "honor") and line breaks
+    // inside the block; a block also counts when at least half of its lines appear in another block.
+    var loose = function (l) { return normLine(String(l).replace(/(\w)-(\w)/g, "$1$2").replace(/(.)\1{2,}/g, "$1$1")).replace(/\s+/g, " ").trim(); };
     var keys = blocks.map(function (b) { return b.map(normLine).join("\n"); });
+    var joined = blocks.map(function (b) { return b.map(loose).join(" "); });
+    var lineSets = blocks.map(function (b) { return b.map(loose); });
     var count = {}; keys.forEach(function (k) { count[k] = (count[k] || 0) + 1; });
+    function repeats(i) {
+      if (count[keys[i]] > 1) return true;
+      for (var j = 0; j < blocks.length; j += 1) {
+        if (j === i) continue;
+        if (joined[i] && joined[i] === joined[j]) return true;
+        var shared = lineSets[i].filter(function (l) { return l && lineSets[j].indexOf(l) >= 0; }).length;
+        if (lineSets[i].length >= 2 && shared * 2 >= lineSets[i].length) return true;
+      }
+      return false;
+    }
     var sections = blocks.map(function (b, i) {
-      return { name: count[keys[i]] > 1 ? "Chorus" : "Verse", lines: b.length, repeat_key: count[keys[i]] > 1 ? keys[i] : null };
+      var rep = repeats(i);
+      return { name: rep ? "Chorus" : "Verse", lines: b.length, repeat_key: rep ? keys[i] : null, header: headers[i] || null, texts: b.slice() };
     });
     var out = [];
     blocks.forEach(function (b, i) {
@@ -94,7 +136,9 @@
   }
 
   var api = {
-    LYRIC_INPUT_RULES: "Paste plain lyric lines. Blank line between sections. [Bracket] tags and (performance cues) are ignored; Song Shape writes its own tags. Lyrics are never fetched from the internet.",
+    LYRIC_INPUT_RULES: "Paste plain lyric lines. Blank line between sections. [Bracket] tags and (performance cues) are ignored; Song Shape writes its own tags. Leave out standalone dashes (-, \u2013, \u2014). Lyrics are never fetched from the internet.",
+    STANDALONE_DASH_HINT: STANDALONE_DASH_HINT,
+    findStandaloneDashes: findStandaloneDashes,
     classifyParenthetical: classifyParenthetical,
     cleanLyricInput: cleanLyricInput,
     lyricInputNote: lyricInputNote

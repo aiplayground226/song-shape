@@ -1,0 +1,25 @@
+{
+  "device": "cpu",
+  "timeout_s": 1800,
+  "separator": [
+    "python",
+    "C:/EDIT/ABSOLUTE/PATH/TO/Song_Shape_v0.2.11-dev/tools/helper/separate_demucs.py",
+    "{input}",
+    "{output}",
+    "--model",
+    "htdemucs",
+    "--device",
+    "{device}"
+  ],
+  "aligner": [
+    "python",
+    "C:/EDIT/ABSOLUTE/PATH/TO/Song_Shape_v0.2.11-dev/tools/helper/align_ctc.py",
+    "{input}",
+    "{words}",
+    "{output}",
+    "--model",
+    "base",
+    "--device",
+    "{device}"
+  ]
+}

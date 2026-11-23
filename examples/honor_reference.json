@@ -1,0 +1,766 @@
+{
+  "schema_version": "songshape-live-0.2",
+  "app_version": "0.2.0",
+  "method": "manual_listener_trace",
+  "y_semantics": "subjective_vocal_delivery_relative_to_singer_baseline",
+  "y_units": "normalized_relative",
+  "audio": {
+    "name": "",
+    "included_in_export": false,
+    "duration_ms": 12000
+  },
+  "baseline": {
+    "y": 0,
+    "defined_by": "annotator"
+  },
+  "timing_offset_ms": 0,
+  "phrases": [],
+  "sections": [],
+  "strokes": [
+    {
+      "id": "stroke-1",
+      "phrase_id": null,
+      "start_ms": 0,
+      "end_ms": 1800,
+      "points": [
+        [
+          0,
+          -0.35
+        ],
+        [
+          1800,
+          0.15
+        ]
+      ],
+      "annotations": [],
+      "section": "Verse",
+      "word_id": null
+    },
+    {
+      "id": "stroke-2",
+      "phrase_id": null,
+      "start_ms": 2100,
+      "end_ms": 4000,
+      "points": [
+        [
+          2100,
+          0.1
+        ],
+        [
+          3200,
+          0.7
+        ],
+        [
+          4000,
+          0.55
+        ]
+      ],
+      "annotations": [],
+      "section": "Verse",
+      "word_id": null
+    },
+    {
+      "id": "stroke-3",
+      "phrase_id": null,
+      "start_ms": 5200,
+      "end_ms": 7800,
+      "points": [
+        [
+          5200,
+          -0.2
+        ],
+        [
+          6500,
+          0.8
+        ],
+        [
+          7800,
+          0.75
+        ]
+      ],
+      "annotations": [],
+      "section": "Chorus",
+      "word_id": null
+    },
+    {
+      "id": "stroke-4",
+      "phrase_id": null,
+      "start_ms": 8100,
+      "end_ms": 11000,
+      "points": [
+        [
+          8100,
+          0.7
+        ],
+        [
+          9600,
+          0.2
+        ],
+        [
+          11000,
+          -0.35
+        ]
+      ],
+      "annotations": [],
+      "section": "Chorus",
+      "word_id": null
+    }
+  ],
+  "gaps": [
+    {
+      "start_ms": 1800,
+      "end_ms": 2100,
+      "duration_ms": 300,
+      "label": "unlabeled_gap",
+      "breath": "unknown"
+    },
+    {
+      "start_ms": 4000,
+      "end_ms": 5200,
+      "duration_ms": 1200,
+      "label": "unlabeled_gap",
+      "breath": "unknown"
+    },
+    {
+      "start_ms": 7800,
+      "end_ms": 8100,
+      "duration_ms": 300,
+      "label": "unlabeled_gap",
+      "breath": "unknown"
+    }
+  ],
+  "lyrics": {
+    "text": "[Block 1 — Disgrace]\nThey marked me in red,\nA badge of disgrace,\n\n[Chorus]\nWhat color is my honor?\nI wear the red with honor.",
+    "lines": [
+      {
+        "id": "line-1",
+        "index": 0,
+        "text": "[Block 1 — Disgrace]",
+        "kind": "tag",
+        "word_ids": []
+      },
+      {
+        "id": "line-2",
+        "index": 1,
+        "text": "They marked me in red,",
+        "kind": "lyric",
+        "word_ids": [
+          "word-1",
+          "word-2",
+          "word-3",
+          "word-4",
+          "word-5"
+        ]
+      },
+      {
+        "id": "line-3",
+        "index": 2,
+        "text": "A badge of disgrace,",
+        "kind": "lyric",
+        "word_ids": [
+          "word-6",
+          "word-7",
+          "word-8",
+          "word-9"
+        ]
+      },
+      {
+        "id": "line-4",
+        "index": 3,
+        "text": "",
+        "kind": "blank",
+        "word_ids": []
+      },
+      {
+        "id": "line-5",
+        "index": 4,
+        "text": "[Chorus]",
+        "kind": "tag",
+        "word_ids": []
+      },
+      {
+        "id": "line-6",
+        "index": 5,
+        "text": "What color is my honor?",
+        "kind": "lyric",
+        "word_ids": [
+          "word-10",
+          "word-11",
+          "word-12",
+          "word-13",
+          "word-14"
+        ]
+      },
+      {
+        "id": "line-7",
+        "index": 6,
+        "text": "I wear the red with honor.",
+        "kind": "lyric",
+        "word_ids": [
+          "word-15",
+          "word-16",
+          "word-17",
+          "word-18",
+          "word-19",
+          "word-20"
+        ]
+      }
+    ],
+    "words": [
+      {
+        "id": "word-1",
+        "line_id": "line-2",
+        "index": 0,
+        "text": "They",
+        "skipped": false
+      },
+      {
+        "id": "word-2",
+        "line_id": "line-2",
+        "index": 1,
+        "text": "marked",
+        "skipped": false
+      },
+      {
+        "id": "word-3",
+        "line_id": "line-2",
+        "index": 2,
+        "text": "me",
+        "skipped": false
+      },
+      {
+        "id": "word-4",
+        "line_id": "line-2",
+        "index": 3,
+        "text": "in",
+        "skipped": false
+      },
+      {
+        "id": "word-5",
+        "line_id": "line-2",
+        "index": 4,
+        "text": "red,",
+        "skipped": false
+      },
+      {
+        "id": "word-6",
+        "line_id": "line-3",
+        "index": 5,
+        "text": "A",
+        "skipped": false
+      },
+      {
+        "id": "word-7",
+        "line_id": "line-3",
+        "index": 6,
+        "text": "badge",
+        "skipped": false
+      },
+      {
+        "id": "word-8",
+        "line_id": "line-3",
+        "index": 7,
+        "text": "of",
+        "skipped": false
+      },
+      {
+        "id": "word-9",
+        "line_id": "line-3",
+        "index": 8,
+        "text": "disgrace,",
+        "skipped": false
+      },
+      {
+        "id": "word-10",
+        "line_id": "line-6",
+        "index": 9,
+        "text": "What",
+        "skipped": false
+      },
+      {
+        "id": "word-11",
+        "line_id": "line-6",
+        "index": 10,
+        "text": "color",
+        "skipped": false
+      },
+      {
+        "id": "word-12",
+        "line_id": "line-6",
+        "index": 11,
+        "text": "is",
+        "skipped": false
+      },
+      {
+        "id": "word-13",
+        "line_id": "line-6",
+        "index": 12,
+        "text": "my",
+        "skipped": false
+      },
+      {
+        "id": "word-14",
+        "line_id": "line-6",
+        "index": 13,
+        "text": "honor?",
+        "skipped": false
+      },
+      {
+        "id": "word-15",
+        "line_id": "line-7",
+        "index": 14,
+        "text": "I",
+        "skipped": false
+      },
+      {
+        "id": "word-16",
+        "line_id": "line-7",
+        "index": 15,
+        "text": "wear",
+        "skipped": false
+      },
+      {
+        "id": "word-17",
+        "line_id": "line-7",
+        "index": 16,
+        "text": "the",
+        "skipped": false
+      },
+      {
+        "id": "word-18",
+        "line_id": "line-7",
+        "index": 17,
+        "text": "red",
+        "skipped": false
+      },
+      {
+        "id": "word-19",
+        "line_id": "line-7",
+        "index": 18,
+        "text": "with",
+        "skipped": false
+      },
+      {
+        "id": "word-20",
+        "line_id": "line-7",
+        "index": 19,
+        "text": "honor.",
+        "skipped": false
+      }
+    ]
+  },
+  "anchors": [
+    {
+      "id": "anchor-1",
+      "word_id": "word-1",
+      "line_id": "line-2",
+      "word_ids": [
+        "word-1"
+      ],
+      "kind": "line",
+      "start_ms": 0,
+      "end_ms": 360,
+      "anchor_ms": 0,
+      "stroke_id": "stroke-1",
+      "stroke_ids": [
+        "stroke-1"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-1"
+    },
+    {
+      "id": "anchor-2",
+      "word_id": "word-2",
+      "line_id": "line-2",
+      "word_ids": [
+        "word-2"
+      ],
+      "kind": "line",
+      "start_ms": 360,
+      "end_ms": 720,
+      "anchor_ms": 360,
+      "stroke_id": "stroke-1",
+      "stroke_ids": [
+        "stroke-1"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-1"
+    },
+    {
+      "id": "anchor-3",
+      "word_id": "word-3",
+      "line_id": "line-2",
+      "word_ids": [
+        "word-3"
+      ],
+      "kind": "line",
+      "start_ms": 720,
+      "end_ms": 1080,
+      "anchor_ms": 720,
+      "stroke_id": "stroke-1",
+      "stroke_ids": [
+        "stroke-1"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-1"
+    },
+    {
+      "id": "anchor-4",
+      "word_id": "word-4",
+      "line_id": "line-2",
+      "word_ids": [
+        "word-4"
+      ],
+      "kind": "line",
+      "start_ms": 1080,
+      "end_ms": 1440,
+      "anchor_ms": 1080,
+      "stroke_id": "stroke-1",
+      "stroke_ids": [
+        "stroke-1"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-1"
+    },
+    {
+      "id": "anchor-5",
+      "word_id": "word-5",
+      "line_id": "line-2",
+      "word_ids": [
+        "word-5"
+      ],
+      "kind": "line",
+      "start_ms": 1440,
+      "end_ms": 1800,
+      "anchor_ms": 1440,
+      "stroke_id": "stroke-1",
+      "stroke_ids": [
+        "stroke-1"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-1"
+    },
+    {
+      "id": "anchor-6",
+      "word_id": "word-6",
+      "line_id": "line-3",
+      "word_ids": [
+        "word-6"
+      ],
+      "kind": "line",
+      "start_ms": 2100,
+      "end_ms": 2575,
+      "anchor_ms": 2100,
+      "stroke_id": "stroke-2",
+      "stroke_ids": [
+        "stroke-2"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-2"
+    },
+    {
+      "id": "anchor-7",
+      "word_id": "word-7",
+      "line_id": "line-3",
+      "word_ids": [
+        "word-7"
+      ],
+      "kind": "line",
+      "start_ms": 2575,
+      "end_ms": 3050,
+      "anchor_ms": 2575,
+      "stroke_id": "stroke-2",
+      "stroke_ids": [
+        "stroke-2"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-2"
+    },
+    {
+      "id": "anchor-8",
+      "word_id": "word-8",
+      "line_id": "line-3",
+      "word_ids": [
+        "word-8"
+      ],
+      "kind": "line",
+      "start_ms": 3050,
+      "end_ms": 3525,
+      "anchor_ms": 3050,
+      "stroke_id": "stroke-2",
+      "stroke_ids": [
+        "stroke-2"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-2"
+    },
+    {
+      "id": "anchor-9",
+      "word_id": "word-9",
+      "line_id": "line-3",
+      "word_ids": [
+        "word-9"
+      ],
+      "kind": "line",
+      "start_ms": 3525,
+      "end_ms": 4000,
+      "anchor_ms": 3525,
+      "stroke_id": "stroke-2",
+      "stroke_ids": [
+        "stroke-2"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-2"
+    },
+    {
+      "id": "anchor-10",
+      "word_id": "word-10",
+      "line_id": "line-6",
+      "word_ids": [
+        "word-10"
+      ],
+      "kind": "line",
+      "start_ms": 5200,
+      "end_ms": 5720,
+      "anchor_ms": 5200,
+      "stroke_id": "stroke-3",
+      "stroke_ids": [
+        "stroke-3"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-3"
+    },
+    {
+      "id": "anchor-11",
+      "word_id": "word-11",
+      "line_id": "line-6",
+      "word_ids": [
+        "word-11"
+      ],
+      "kind": "line",
+      "start_ms": 5720,
+      "end_ms": 6240,
+      "anchor_ms": 5720,
+      "stroke_id": "stroke-3",
+      "stroke_ids": [
+        "stroke-3"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-3"
+    },
+    {
+      "id": "anchor-12",
+      "word_id": "word-12",
+      "line_id": "line-6",
+      "word_ids": [
+        "word-12"
+      ],
+      "kind": "line",
+      "start_ms": 6240,
+      "end_ms": 6760,
+      "anchor_ms": 6240,
+      "stroke_id": "stroke-3",
+      "stroke_ids": [
+        "stroke-3"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-3"
+    },
+    {
+      "id": "anchor-13",
+      "word_id": "word-13",
+      "line_id": "line-6",
+      "word_ids": [
+        "word-13"
+      ],
+      "kind": "line",
+      "start_ms": 6760,
+      "end_ms": 7280,
+      "anchor_ms": 6760,
+      "stroke_id": "stroke-3",
+      "stroke_ids": [
+        "stroke-3"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-3"
+    },
+    {
+      "id": "anchor-14",
+      "word_id": "word-14",
+      "line_id": "line-6",
+      "word_ids": [
+        "word-14"
+      ],
+      "kind": "line",
+      "start_ms": 7280,
+      "end_ms": 7800,
+      "anchor_ms": 7280,
+      "stroke_id": "stroke-3",
+      "stroke_ids": [
+        "stroke-3"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-3"
+    },
+    {
+      "id": "anchor-15",
+      "word_id": "word-15",
+      "line_id": "line-7",
+      "word_ids": [
+        "word-15"
+      ],
+      "kind": "line",
+      "start_ms": 8100,
+      "end_ms": 8583,
+      "anchor_ms": 8100,
+      "stroke_id": "stroke-4",
+      "stroke_ids": [
+        "stroke-4"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-4"
+    },
+    {
+      "id": "anchor-16",
+      "word_id": "word-16",
+      "line_id": "line-7",
+      "word_ids": [
+        "word-16"
+      ],
+      "kind": "line",
+      "start_ms": 8583,
+      "end_ms": 9067,
+      "anchor_ms": 8583,
+      "stroke_id": "stroke-4",
+      "stroke_ids": [
+        "stroke-4"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-4"
+    },
+    {
+      "id": "anchor-17",
+      "word_id": "word-17",
+      "line_id": "line-7",
+      "word_ids": [
+        "word-17"
+      ],
+      "kind": "line",
+      "start_ms": 9067,
+      "end_ms": 9550,
+      "anchor_ms": 9067,
+      "stroke_id": "stroke-4",
+      "stroke_ids": [
+        "stroke-4"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-4"
+    },
+    {
+      "id": "anchor-18",
+      "word_id": "word-18",
+      "line_id": "line-7",
+      "word_ids": [
+        "word-18"
+      ],
+      "kind": "line",
+      "start_ms": 9550,
+      "end_ms": 10033,
+      "anchor_ms": 9550,
+      "stroke_id": "stroke-4",
+      "stroke_ids": [
+        "stroke-4"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-4"
+    },
+    {
+      "id": "anchor-19",
+      "word_id": "word-19",
+      "line_id": "line-7",
+      "word_ids": [
+        "word-19"
+      ],
+      "kind": "line",
+      "start_ms": 10033,
+      "end_ms": 10517,
+      "anchor_ms": 10033,
+      "stroke_id": "stroke-4",
+      "stroke_ids": [
+        "stroke-4"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-4"
+    },
+    {
+      "id": "anchor-20",
+      "word_id": "word-20",
+      "line_id": "line-7",
+      "word_ids": [
+        "word-20"
+      ],
+      "kind": "line",
+      "start_ms": 10517,
+      "end_ms": 11000,
+      "anchor_ms": 10517,
+      "stroke_id": "stroke-4",
+      "stroke_ids": [
+        "stroke-4"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "line",
+      "group_id": "group-4"
+    }
+  ],
+  "draft": null,
+  "reference": {
+    "title": "What Color Is My Honor?",
+    "artist": "Peter Thiel"
+  },
+  "active_word_id": "word-20",
+  "harmony_ranges": [],
+  "performer": {
+    "identity": "One consistent bright, clean male lyric tenor throughout. Same vocal timbre, character, and diction. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.",
+    "allow_harmony": false
+  },
+  "notes": "Sample reference trace for the Map my lyrics workflow. Fictional timing, not a transcription of a commercial recording. The performer identity is set on this sample only — the app default is a generic lead singer."
+}

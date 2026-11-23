@@ -237,7 +237,10 @@ test('UI is wired: AI example and draft controls exist and sending happens only 
   // Updated in v0.2.8: requests go through SS.sendAiChatAsync in exactly two helpers,
   // aiSheet (Send / guided stage 4) and aiDraftRun (Draft trace / guided stage 2).
   assert.equal(app.split('SS.sendAiChat(').length - 1, 0, 'no direct sendAiChat calls left in app.js');
-  assert.equal(app.split('SS.sendAiChatAsync(').length - 1, 2, 'only the stage-2 and stage-4 helpers call the network helper');
+  // v0.2.11: a third explicit click path, "Let the local AI run the tools" (btn-pipeline-ai), checks the AI is enabled first.
+  assert.equal(app.split('SS.sendAiChatAsync(').length - 1, 3, 'only the stage-2, stage-4 and tool-pipeline helpers call the network helper');
+  const pipe = app.slice(app.indexOf('"btn-pipeline-ai").addEventListener'), app.indexOf('SS.runPipelineWithAi('));
+  assert.match(pipe, /if \(!cfg\.enabled \|\| !cfg\.baseUrl\)/);
   const handler = app.slice(app.indexOf('function aiDraftRun()'), app.indexOf('"btn-ai-draft-trace").addEventListener'));
   assert.match(handler, /SS\.sendAiChatAsync\(messages/);
   assert.match(handler, /if \(!cfg\.enabled \|\| !cfg\.baseUrl\)/);

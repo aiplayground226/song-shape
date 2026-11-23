@@ -14,3 +14,5 @@ desktop.ini
 # Secrets must never be committed
 .env
 .env.*
+# Python caches from the local helper
+__pycache__/

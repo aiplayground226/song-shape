@@ -156,7 +156,7 @@
 
   function beginStroke(yNorm) {
     if (!player.hasAudio()) {
-      setStatus("Load a local .wav or .mp3 first, or click “Load demo tone.”", "warn");
+      setStatus("Click Open audio (.wav or .mp3) first, or click “Load demo tone.”", "warn");
       return;
     }
     if (player.paused()) {
@@ -387,7 +387,7 @@
 
   document.getElementById("btn-play").addEventListener("click", function () {
     if (!player.hasAudio()) {
-      setStatus("Load a local .wav or .mp3 first, or click “Load demo tone.”", "warn");
+      setStatus("Click Open audio (.wav or .mp3) first, or click “Load demo tone.”", "warn");
       return;
     }
     player.toggle().catch(function () {
@@ -542,6 +542,9 @@
   document.getElementById("btn-open").addEventListener("click", function () {
     fileAudio.click();
   });
+  // v0.2.11 fix7: guided step 1 opens the same file picker as the header button.
+  var flowOpen = document.getElementById("btn-flow-open");
+  if (flowOpen) flowOpen.addEventListener("click", function () { fileAudio.click(); });
   fileAudio.addEventListener("change", function (ev) {
     var file = ev.target.files && ev.target.files[0];
     if (file) loadAudioFile(file);
@@ -549,6 +552,7 @@
   });
 
   document.getElementById("btn-export-json").addEventListener("click", exportJSON);
+  document.getElementById("btn-save-top").addEventListener("click", exportJSON);
   document.getElementById("btn-import-json").addEventListener("click", function () {
     fileJson.click();
   });
@@ -574,6 +578,7 @@
     loadExampleTraces();
   });
 
+  var currentAudioFile = null; // v0.2.11: kept in memory only, for the optional loopback helper
   function loadAudioFile(file) {
     if (!SS.isSupportedAudioFile(file)) {
       setStatus(SS.SUPPORTED_AUDIO_MESSAGE, "warn");
@@ -583,6 +588,7 @@
     var displayName = SS.sanitizeLabel(file.name, SS.MAX_STRING_LEN) || "audio";
     setStatus("Loading " + displayName + "…", "info");
     player.loadFile(file).then(function (info) {
+      currentAudioFile = file;
       var name = SS.sanitizeLabel(info.name, SS.MAX_STRING_LEN) || displayName;
       var durationMs = Math.round((info.duration || 0) * 1000);
       if (!SS.isFiniteNumber(durationMs) || durationMs < 0) durationMs = 0;
@@ -598,6 +604,8 @@
       };
       audioLabel.textContent = name + "  (" + formatTime(info.duration) + ")";
       audioLabel.title = name + " · " + (info.type || "audio") + " · local file, not uploaded";
+      var fas = document.getElementById("flow-audio-status");
+      if (fas) fas.textContent = "Open: " + name + " (" + formatTime(info.duration) + ").";
       setStatus(
         "Loaded " + name + ". This file stays on your computer. Press Play and hold the left button to trace.",
         "ok"
@@ -613,6 +621,7 @@
 
   function exportJSON() {
     session.replacement_lyrics = document.getElementById("new-lyrics").value;
+    session.extend_lyrics = document.getElementById("extend-lyrics").value;
     syncPhraseMembership();
     var data = SS.sessionToJSON(session);
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -629,7 +638,8 @@
       // Parse and validate first. Only then replace the live session.
       var next = SS.parseSessionText(text, file && file.size);
       session = next;
-      document.getElementById("draft-baseline-hz").value = session.draft && session.draft.baseline_hz ? String(session.draft.baseline_hz) : "";
+      document.getElementById("draft-baseline-hz").value = session.vocal_range ? String(session.vocal_range.baseline_hz) : session.draft && session.draft.baseline_hz ? String(session.draft.baseline_hz) : "";
+      document.getElementById("draft-baseline-hz").readOnly = !!session.vocal_range; renderVocalRange();
       recorder = SS.createRecorder();
       recording = false;
       offsetInput.value = String(session.timing_offset_ms || 0);
@@ -641,11 +651,16 @@
       refreshStrokeList();
       refreshLyricsUi();
       document.getElementById("new-lyrics").value = session.replacement_lyrics || "";
+      document.getElementById("extend-lyrics").value = session.extend_lyrics || "";
+      renderHarmonyList();
       setStatus(
         "Imported " + session.strokes.length + " stroke(s) and " + session.gaps.length + " gap(s). Audio is not inside the JSON; load the matching file if you want to hear it.",
         "ok"
       );
       draw();
+      // v0.2.11: imported word marks count as stage 1.
+      var placedN = (session.anchors || []).filter(function (a) { return a && !a.skipped; }).length;
+      if (placedN && typeof gSet === "function") gSet(1, "done", placedN + " word(s) placed (from the imported project)");
     }).catch(function (err) {
       var msg = err && err.message ? err.message : "That file is not valid Song Shape JSON.";
       setStatus(msg + " The current session was left unchanged.", "warn");
@@ -807,9 +822,126 @@
     }
   });
 
+  document.getElementById("btn-clear-loop").addEventListener("click", function () {
+    player.setLoop(null, null);
+    document.getElementById("btn-loop").classList.remove("on");
+    setStatus("Loop cleared.", "info");
+    draw();
+  });
+
+  // v0.2.11 fix5: tap-to-mark line starts. Tap times are audio times (not display/timing-offset times).
+  var tappingLines = false;
+  // v0.2.11 fix6e: while tapping, a compact dock beside the graph keeps the tap controls in reach.
+  function positionTapDock() {
+    var dock = document.getElementById("tap-dock"), cv = document.getElementById("stage");
+    if (!dock || dock.hidden || !cv) return;
+    var r = cv.getBoundingClientRect(), vw = window.innerWidth || document.documentElement.clientWidth, vh = window.innerHeight || document.documentElement.clientHeight;
+    var side = document.querySelector(".workspace") ? document.querySelector(".workspace").getBoundingClientRect() : r;
+    var leftGap = r.left - 8, rightGap = vw - Math.max(r.right, side.right) - 8, w = 190;
+    dock.classList.remove("floating");
+    var left;
+    if (leftGap >= 150) { w = Math.min(230, leftGap - 8); left = Math.max(4, r.left - w - 8); }
+    else if (rightGap >= 150) { w = Math.min(230, rightGap - 8); left = vw - rightGap; }
+    else {
+      var aside = document.querySelector(".workspace .side"), ar = aside ? aside.getBoundingClientRect() : null;
+      if (ar && ar.width >= 150 && ar.left >= r.right - 10) { w = Math.min(230, ar.width - 8); left = ar.left + 4; dock.classList.add("floating"); } // over the side panel, beside the graph
+      else { w = 180; left = Math.max(4, r.left + 6); dock.classList.add("floating"); } // very narrow: float over the graph's left edge
+    }
+    dock.style.width = w + "px"; dock.style.left = Math.round(left) + "px";
+    var h = dock.offsetHeight || 220;
+    // follow the bottom word lane of the graph, but stay on screen while scrolling
+    var top = r.bottom - h - 24;
+    top = Math.max(8, Math.min(vh - h - 8, top));
+    dock.style.top = Math.round(top) + "px";
+  }
+  window.addEventListener("scroll", positionTapDock, { passive: true });
+  window.addEventListener("resize", positionTapDock);
+  function refreshTapUi() {
+    var next = SS.nextTapLine(session), taps = SS.lineTaps(session), marked = taps.filter(function (t) { return !t.skipped; }).length;
+    var dock = document.getElementById("tap-dock");
+    if (dock) {
+      var lastTap = taps.length ? taps[taps.length - 1] : null, lines = (session.lyrics && session.lyrics.lines) || [];
+      var cur = lastTap ? lines.filter(function (l) { return l.id === lastTap.line_id; })[0] : null;
+      dock.hidden = !tappingLines;
+      document.getElementById("tap-dock-current").textContent = cur ? "\u201c" + cur.text + "\u201d" + (lastTap.skipped ? " (skipped)" : "") : "—";
+      document.getElementById("tap-dock-next").textContent = next ? "\u201c" + next.text + "\u201d" : "all lines done";
+      document.getElementById("tap-dock-count").textContent = marked + " tapped, " + (taps.length - marked) + " skipped";
+      var lat = document.getElementById("tap-latency"), dl = document.getElementById("tap-dock-latency");
+      if (lat && dl && document.activeElement !== dl) dl.value = lat.value;
+      renderer.view.tapNext = tappingLines && next ? next.text : null;
+      var dw = document.getElementById("tap-dock-warn"), tw = document.getElementById("tap-warn");
+      if (dw) { dw.hidden = !tapWarning; document.getElementById("tap-dock-warn-text").textContent = tapWarning; }
+      if (tw) { tw.hidden = !tapWarning; tw.textContent = tapWarning ? tapWarning + " Use Clear taps to start again." : ""; }
+      var big = document.getElementById("tap-next-big");
+      if (big) big.textContent = next ? "Next to tap: \u201c" + next.text + "\u201d" : !lines.length ? "Paste the original lyrics first (step 2)." : "All lines tapped.";
+      if (tappingLines) positionTapDock();
+    }
+    document.getElementById("btn-tap-start").textContent = tappingLines ? "Stop tapping" : "Start tapping";
+    document.getElementById("tap-next").textContent = marked + " line start(s) tapped, " + (taps.length - marked) + " skipped. " +
+      (next ? "Next: \u201c" + next.text + "\u201d" : "All lines done. Undo or Clear to redo.") + (tappingLines ? " Enter / Space taps; use Play / pause to pause." : "");
+  }
+  // v0.2.11 fix6e: one tap per line. Two taps very close together, or more taps than lines, usually mean line
+  // ends were tapped too; say so gently and offer Clear taps.
+  var tapWarning = "";
+  function checkTapPattern(extraAttempt) {
+    var taps = SS.lineTaps(session).filter(function (t) { return !t.skipped; }), lines = SS.tapLines ? SS.tapLines(session) : (session.lyrics && session.lyrics.lines || []);
+    var close = 0;
+    for (var i = 1; i < taps.length; i++) if (taps[i].t_ms - taps[i - 1].t_ms < 800) close++;
+    var dur = player.hasAudio() ? player.duration() * 1000 : 0, ranOut = !SS.nextTapLine(session) && dur && player.currentTime() * 1000 < dur * 0.7;
+    tapWarning = extraAttempt ? "More taps than lyric lines. Are you tapping line ends too? Tap only each line's first sound." :
+      close ? close + " pair(s) of taps less than 0.8 s apart. Tap once per line (its first sound), not at line ends." :
+      ranOut ? "All lines were tapped but most of the song is still to come. Were line ends tapped too? Tap once per line." : "";
+  }
+  function tapThisLine() {
+    ensureLyricsFromBox();
+    if (!player.hasAudio()) { setStatus("Open a song first.", "warn"); return; }
+    var correction = Number(document.getElementById("tap-latency").value);
+    var tap = SS.addLineTap(session, player.currentTime() * 1000, isFinite(correction) ? correction : -120);
+    checkTapPattern(!tap);
+    refreshTapUi(); draw();
+  }
+  // v0.2.11 fix7: Clear taps removes only the taps. Words placed from them keep their positions (no longer
+  // labelled as tap-anchored); run Place words again to re-place them without taps.
+  function clearTapsOnly() {
+    var n = SS.clearLineTaps(session);
+    (session.anchors || []).forEach(function (a) { if (a.tap_anchored) a.tap_anchored = false; });
+    setStatus(n + " tap(s) cleared. Placed words were kept.", "info");
+    var g1 = document.getElementById("g-status-1");
+    if (g1 && g1.dataset.state !== "todo" && g1.dataset.state !== "running") {
+      var ws = (session.lyrics && session.lyrics.words || []).filter(function (w) { return !w.skipped; });
+      g1.textContent = stage1Label(ws) + " (taps cleared)";
+    }
+    return n;
+  }
+  document.getElementById("btn-tap-start").addEventListener("click", function () {
+    ensureLyricsFromBox(); tappingLines = !tappingLines;
+    if (tappingLines && document.activeElement && document.activeElement.blur) document.activeElement.blur(); // keys tap, never type into the lyrics
+    refreshTapUi(); document.getElementById("btn-tap-start").blur();
+  });
+  document.getElementById("btn-tap-play").addEventListener("click", function () { if (player.hasAudio()) player.toggle().catch(function () {}); this.blur(); });
+  document.getElementById("btn-tap-mark").addEventListener("click", function () { tapThisLine(); this.blur(); });
+  document.getElementById("btn-tap-skip").addEventListener("click", function () { ensureLyricsFromBox(); SS.skipLineTap(session); refreshTapUi(); this.blur(); });
+  document.getElementById("btn-tap-undo").addEventListener("click", function () { SS.undoLineTap(session); checkTapPattern(false); refreshTapUi(); draw(); this.blur(); });
+  document.getElementById("btn-tap-clear").addEventListener("click", function () { if (!SS.lineTaps(session).length || confirm("Clear all line taps? Only the taps are removed; your placed words stay.")) { clearTapsOnly(); tapWarning = ""; refreshTapUi(); draw(); } this.blur(); });
+
+  document.getElementById("tap-dock-clear").addEventListener("click", function () { if (confirm("Clear all line taps and start again? Only the taps are removed; your placed words stay.")) { clearTapsOnly(); tapWarning = ""; refreshTapUi(); draw(); } this.blur(); });
+  document.getElementById("tap-dock-stop").addEventListener("click", function () { tappingLines = false; refreshTapUi(); draw(); });
+  document.getElementById("tap-dock-play").addEventListener("click", function () { if (player.hasAudio()) player.toggle().catch(function () {}); this.blur(); });
+  document.getElementById("tap-dock-mark").addEventListener("click", function () { tapThisLine(); this.blur(); });
+  document.getElementById("tap-dock-skip").addEventListener("click", function () { ensureLyricsFromBox(); SS.skipLineTap(session); refreshTapUi(); draw(); this.blur(); });
+  document.getElementById("tap-dock-undo").addEventListener("click", function () { SS.undoLineTap(session); checkTapPattern(false); refreshTapUi(); draw(); this.blur(); });
+  document.getElementById("tap-dock-latency").addEventListener("input", function () { document.getElementById("tap-latency").value = this.value; });
+  document.getElementById("tap-latency").addEventListener("input", function () { var dl = document.getElementById("tap-dock-latency"); if (dl) dl.value = this.value; });
   window.addEventListener("keydown", function (ev) {
     var tag = (ev.target && ev.target.tagName) || "";
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    // v0.2.11 fix7: while tapping, Enter / Space in a text box tap the line instead of typing into the lyrics.
+    if (tappingLines && tag === "TEXTAREA" && (ev.code === "Enter" || ev.code === "Space")) { ev.preventDefault(); if (!ev.repeat) { tapThisLine(); refreshTapUi(); draw(); } return; }
+    if (tag === "INPUT" || tag === "TEXTAREA" || ev.target && ev.target.isContentEditable) return;
+    if (tappingLines && !ev.altKey && (ev.code === "Space" || ev.code === "Enter" || ev.code === "Backspace" || (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z")) {
+      ev.preventDefault(); if (ev.repeat) return;
+      if (ev.code === "Backspace" || (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { SS.undoLineTap(session); checkTapPattern(false); } else tapThisLine();
+      refreshTapUi(); draw(); return;
+    }
     if (ev.code === "Space") {
       ev.preventDefault();
       if (!player.hasAudio()) return;
@@ -910,7 +1042,8 @@
     }
     var audioMeta = session.audio;
     session = SS.parseSession(obj);
-    document.getElementById("draft-baseline-hz").value = session.draft && session.draft.baseline_hz ? String(session.draft.baseline_hz) : "";
+    document.getElementById("draft-baseline-hz").value = session.vocal_range ? String(session.vocal_range.baseline_hz) : session.draft && session.draft.baseline_hz ? String(session.draft.baseline_hz) : "";
+      document.getElementById("draft-baseline-hz").readOnly = !!session.vocal_range; renderVocalRange();
     if (audioMeta && audioMeta.name) session.audio = audioMeta;
     recorder = SS.createRecorder();
     if (session.phrases && session.phrases[0]) {
@@ -919,6 +1052,8 @@
     refreshStrokeList();
     refreshLyricsUi();
     document.getElementById("new-lyrics").value = session.replacement_lyrics || "";
+    document.getElementById("extend-lyrics").value = session.extend_lyrics || "";
+    renderHarmonyList();
     setStatus("Loaded the example annotation: rise to a peak, a timed break, a pickup, then a nosedive. Two strokes, one gap. Fictional data.", "ok");
     renderer.resize();
     draw();
@@ -991,7 +1126,9 @@
   // v0.2.9: pasted lyrics are cleaned first: [bracket] tags and (performance cues) are ignored.
   var lastLyricsInput = null;
   function setLyricsFromInput(text) {
-    var res = SS.cleanLyricInput ? SS.cleanLyricInput(String(text || "")) : { text: String(text || "") };
+    var res;
+    try { res = SS.cleanLyricInput ? SS.cleanLyricInput(String(text || "")) : { text: String(text || "") }; }
+    catch (e) { showLyricInputError("lyrics-input-note", "Original lyrics", e); throw e; }
     SS.setLyrics(session, res.text);
     lastLyricsInput = text;
     var note = SS.lyricInputNote ? SS.lyricInputNote(res) : "";
@@ -1004,8 +1141,35 @@
     if (!nl || !note || !SS.cleanLyricInput) return;
     nl.addEventListener("input", function () {
       var msg = "";
-      try { msg = SS.lyricInputNote(SS.cleanLyricInput(nl.value)); } catch (e) { msg = String(e.message || e); }
+      try { msg = SS.lyricInputNote(SS.cleanLyricInput(nl.value)); } catch (e) { showLyricInputError("new-lyrics-input-note", "Replacement lyrics", e); return; }
       note.textContent = msg ? "Replacement lyrics: " + msg : "";
+      note.removeAttribute("data-kind");
+    });
+  })();
+  // v0.2.10: standalone dashes are refused with a plain message (never a silent failure).
+  function showLyricInputError(noteId, label, e) {
+    var msg = label + ": " + String(e && e.message || e);
+    var el = document.getElementById(noteId);
+    if (el) { el.textContent = msg; el.setAttribute("data-kind", "error"); }
+    setStatus(msg, "error");
+  }
+  (function () {
+    var box = document.getElementById("lyrics-text");
+    if (!box || !SS.findStandaloneDashes) return;
+    box.addEventListener("input", function () {
+      var el = document.getElementById("lyrics-input-note");
+      var found = SS.findStandaloneDashes(box.value);
+      if (found.length) {
+        try { SS.cleanLyricInput(box.value); } catch (e) { showLyricInputError("lyrics-input-note", "Original lyrics", e); }
+      } else if (el && el.getAttribute("data-kind") === "error") { el.textContent = ""; el.removeAttribute("data-kind"); }
+    });
+    window.addEventListener("error", function (ev) {
+      var err = ev && ev.error;
+      if (err && err.code === "SONG_SHAPE_STANDALONE_DASH") setStatus(String(err.message), "error");
+    });
+    window.addEventListener("unhandledrejection", function (ev) {
+      var err = ev && ev.reason;
+      if (err && err.code === "SONG_SHAPE_STANDALONE_DASH") setStatus(String(err.message), "error");
     });
   })();
   function ensureLyricsFromBox() {
@@ -1015,6 +1179,7 @@
     var current = session.lyrics && session.lyrics.text ? session.lyrics.text : "";
     if (text === current || text === lastLyricsInput) return;
     if (SS.cleanLyricInput && SS.cleanLyricInput(text).text === current) return;
+    if (lyricsChangeClearsWork(text) === false) { lastLyricsInput = text; return; }
     setLyricsFromInput(text);
     lyricsDirty = false;
   }
@@ -1030,6 +1195,7 @@
   }
 
   function refreshLyricsUi() {
+    if (document.getElementById("tap-next")) refreshTapUi();
     var box = document.getElementById("lyrics-text");
     if (box && document.activeElement !== box) {
       box.value = session.lyrics && session.lyrics.text ? session.lyrics.text : "";
@@ -1091,7 +1257,24 @@
     draw();
   });
 
+  // v0.2.11 fix7: the box fires "change" whenever it loses focus after any edit (even a stray Enter or space,
+  // for example while tapping). Only a real change in the words resets placements, and only after asking.
+  function lyricsChangeClearsWork(text) {
+    var cleaned;
+    try { cleaned = SS.cleanLyricInput ? SS.cleanLyricInput(String(text || "")).text : String(text || ""); } catch (e) { return null; }
+    var current = session.lyrics && session.lyrics.text != null ? session.lyrics.text : "";
+    var norm = function (t) { return String(t || "").replace(/\r\n?/g, "\n").split("\n").map(function (l) { return l.trim(); }).filter(Boolean).join("\n"); };
+    return norm(cleaned) === norm(current) ? false : true;
+  }
   document.getElementById("lyrics-text").addEventListener("change", function () {
+    var changed = lyricsChangeClearsWork(this.value);
+    if (changed === false) { lastLyricsInput = this.value; return; }
+    var placed = (session.anchors || []).length, taps = SS.lineTaps(session).length;
+    if (changed && (placed || taps) && !window.confirm("The original lyrics changed. Updating them clears " + placed + " placed word(s)" + (taps ? " and " + taps + " line tap(s)" : "") + " because the word list changes. Update the lyrics?")) {
+      this.value = lastLyricsInput != null ? lastLyricsInput : (session.lyrics && session.lyrics.text) || "";
+      setStatus("Lyrics edit undone: your placed words and taps are kept.", "info");
+      return;
+    }
     setLyricsFromInput(this.value);
     renderer.view.selectedAnchorId = null;
     refreshLyricsUi();
@@ -1109,6 +1292,7 @@
       "info");
   });
 
+  var skipHistory = []; // v0.2.11: Undo word also undoes a Skip made after the last placement
   document.getElementById("btn-skip-word").addEventListener("click", function () {
     ensureLyricsFromBox();
     var next = SS.nextWord(session);
@@ -1117,6 +1301,7 @@
       return;
     }
     SS.skipNextWord(session);
+    skipHistory.push({ word_id: next.id, anchors: session.anchors.length });
     refreshLyricsUi();
     var after = SS.nextWord(session);
     setStatus("Skipped “" + next.text + "”." + (after ? " Next: “" + after.text + "”." : ""), "ok");
@@ -1139,6 +1324,14 @@
   });
 
   document.getElementById("btn-undo-word").addEventListener("click", function () {
+    var lastSkip = skipHistory[skipHistory.length - 1];
+    if (lastSkip && lastSkip.anchors === session.anchors.length) {
+      skipHistory.pop();
+      var back = SS.unskipWord(session, lastSkip.word_id);
+      refreshLyricsUi(); draw();
+      setStatus("Un-skipped “" + (back ? back.text : "word") + "”. It is the next word to place again.", "ok");
+      return;
+    }
     var nStrokes = session.strokes.length;
     var removed = SS.undoLastAnchor(session);
     if (!removed || !removed.length) {
@@ -1157,7 +1350,7 @@
       refreshLyricsUi();
       return;
     }
-    if (!window.confirm("Clear all word placements? Strokes stay on the page, unassigned.")) return;
+    if (!window.confirm("Clear ALL " + session.anchors.length + " placed word(s)? Line taps and strokes stay. (To remove only the taps, use Clear taps in step 6.)")) return;
     SS.clearAnchors(session);
     renderer.view.selectedAnchorId = null;
     refreshLyricsUi();
@@ -1253,14 +1446,20 @@
     var el = document.getElementById("chk-exclude-unconfirmed-ai");
     return { excludeUnconfirmedAi: !!(el && el.checked) };
   }
-  function contourTransfer(newLyrics) {
+  function extendOn() { var el = document.getElementById("chk-extend"); return !!(el && el.checked && SS.buildExtendTransfer); }
+  function contourTransfer(newLyrics, opts) {
     var performanceMap = SS.buildPerformanceMap(SS.sessionToJSON(session), mapOptions());
-    return { map: performanceMap, transfer: SS.buildTransfer(performanceMap, newLyrics) };
+    // v0.2.11 fix6: Extend maps your sections onto the reference sections; new sections inherit a styled section.
+    if (extendOn()) {
+      var ext = SS.buildExtendTransfer(performanceMap, newLyrics, opts || {});
+      if (ext.refs.length) return { map: performanceMap, transfer: ext.transfer, extend: ext };
+    }
+    return { map: performanceMap, transfer: SS.buildTransfer(performanceMap, newLyrics), extend: null };
   }
 
-  function fullHandoff(newLyrics) {
-    var result = contourTransfer(newLyrics);
-    return { map: result.map, transfer: result.transfer, handoff: SS.makeHandoff(result.map, result.transfer) };
+  function fullHandoff(newLyrics, opts) {
+    var result = contourTransfer(newLyrics, opts);
+    return { map: result.map, transfer: result.transfer, extend: result.extend, handoff: SS.makeHandoff(result.map, result.transfer) };
   }
   function privateMappingRequest(newLyrics) {
     return fullHandoff(newLyrics).handoff.prompt; // plain text for Copy/Save
@@ -1286,7 +1485,7 @@
     ensureLyricsFromBox();
     var mine = document.getElementById("new-lyrics").value;
     var request = privateMappingRequest(mine);
-    document.getElementById("map-output").value = request;
+    document.getElementById("map-output").value = request; lastSheet = { full: "", label: "AI request (not for Suno)" }; updateSunoCount();
     copyText(request, "Copied an AI-ready request with your original lyrics and contour events. Reference lyrics and audio were omitted. Nothing was sent.");
   });
   document.getElementById("btn-map-request-save").addEventListener("click", function () {
@@ -1294,26 +1493,165 @@
     ensureLyricsFromBox();
     var mine = document.getElementById("new-lyrics").value;
     var request = privateMappingRequest(mine);
-    document.getElementById("map-output").value = request;
+    document.getElementById("map-output").value = request; lastSheet = { full: "", label: "AI request (not for Suno)" }; updateSunoCount();
     var blob = new Blob([request], { type: "text/plain;charset=utf-8" });
     var name = "songshape-ai-request.txt"; // Do not leak source title via filename.
     downloadBlob(blob, name);
     setStatus("Saved the mapping request as a .txt file. Nothing was uploaded.", "ok");
   });
-  function localSheet(mine) {
+  function localSheet(mine, opts) {
     syncReferenceFromFields();
     ensureLyricsFromBox();
-    var mapped = fullHandoff(mine);
+    var mapped = fullHandoff(mine, opts);
     var directions = SS.exportDirections(mapped.map, mapped.transfer);
     var review = mapped.handoff.rows.filter(function (row) { return row.status === "needs_review"; });
-    var text = mapped.handoff.lyrics + "\n\n[Style prompt]\n" + directions.style +
-      "\n\n" + (review.length ? "Review " + review.length + " line(s) with mismatched/missing anchors or strokes.\n" : "") +
+    // v0.2.11: the pasteable sheet holds only the lyrics with tags. Style prompt and notes are separate.
+    var untagged = mapped.handoff.rows.filter(function (row) { return !(row.cpu_tags || []).length; }).map(function (row) { return row.text; });
+    var fitNotes = mapped.handoff.rows.filter(function (row) { return (row.fit_notes || []).length; }).length;
+    var notes = (review.length ? review.length + " line(s) need your ear: " + review.slice(0, 6).map(function (r) { return "“" + r.text + "”"; }).join(", ") + (review.length > 6 ? "…" : "") + ".\n" : "No line needs a timing check.\n") +
+      (fitNotes ? fitNotes + " line(s) have a different word count from the reference line (normal for new lyrics; check the syllable fit).\n" : "") +
+      (untagged.length ? untagged.length + " line(s) got no delivery tag (no contour measured there): " + untagged.slice(0, 6).map(function (t) { return "“" + t + "”"; }).join(", ") + ".\n" : "") +
       mapped.handoff.caveats + "\n" + (SS.SUNO_LIMITATIONS || "");
-    return { text: text, review: review.length, mapped: mapped };
+    var text = mapped.handoff.lyrics + "\n\n[Style prompt]\n" + directions.style;
+    var extNotes = mapped.extend ? mapped.extend.notes : (extendOn() ? "No reference sections yet: place the reference words (step 7) first." : "");
+    var extEl = document.getElementById("extend-notes");
+    if (extEl) extEl.value = extNotes;
+    if (mapped.extend) notes = mapped.extend.notes.split("\n")[0] + " Section notes are in Extend.\n" + notes;
+    return { text: text, lyrics: mapped.handoff.lyrics, style: directions.style, notes: notes, extend: mapped.extend, review: review.length, untagged: untagged.length, lines: mapped.handoff.rows.length, mapped: mapped };
   }
+  // v0.2.11 fix6d: Suno character budget. The paste box holds the sheet fitted to the chosen limit
+  // (nothing shortened when the full sheet fits); the full sheet is kept for "No limit".
+  var lastSheet = { full: "", label: "" };
+  function sunoBudget() {
+    var el = document.getElementById("suno-budget");
+    var v = el ? parseInt(el.value, 10) : 5000;
+    return isFinite(v) ? v : 5000;
+  }
+  function updateSunoCount() {
+    var out = document.getElementById("map-output"), el = document.getElementById("suno-count");
+    if (!out || !el || !SS.sheetChars) return;
+    var n = SS.sheetChars(out.value), b = sunoBudget(), f = lastSheet.fit;
+    var fmt = function (x) { return x.toLocaleString("en-US"); };
+    var txt = (lastSheet.label ? lastSheet.label + ": " : "") + fmt(n) + " used" + (b ? " · " + fmt(Math.max(0, b - n)) + " left of " + fmt(b) : " (no limit)") +
+      (f && f.text === out.value ? " (lyrics + line tags " + fmt(f.core_length) + " · global description " + fmt(f.global_length) + (f.harmony_notes ? " · harmony notes " + fmt(f.harmony_notes_length) : "") + ")" : "") + (b && n > b ? " — over the limit" : "");
+    el.textContent = txt;
+    el.className = "hint" + ((b && n > b) || (f && f.line_tags_shortened) ? " warn-text" : "");
+    var s2 = document.getElementById("suno-count-step2");
+    if (s2) s2.textContent = lastSheet.label === "Step 2 sheet" ? "In Lyrics for Suno: " + txt.replace(/^Step 2 sheet: /, "") + "." : "";
+  }
+  function putSheet(text, label) {
+    lastSheet = { full: String(text || ""), label: label || "", fit: null };
+    var b = sunoBudget(), fit = null, out = document.getElementById("map-output");
+    if (b && SS.fitSunoBudget && lastSheet.full) {
+      try { fit = SS.fitSunoBudget(lastSheet.full, { budget: b }); } catch (err) { fit = null; }
+    }
+    out.value = fit ? fit.text : lastSheet.full;
+    lastSheet.fit = fit;
+    var note = document.getElementById("suno-fit-note");
+    if (note) note.textContent = fit ? SS.sunoBudgetNote(fit) : (b ? "" : "No limit: the full sheet is shown (" + SS.sheetChars(lastSheet.full).toLocaleString("en-US") + " characters).");
+    if (note) note.className = "hint" + (fit && (fit.lyrics_over_budget || fit.line_tags_shortened) ? " warn-text" : "");
+    updateSunoCount();
+    return fit;
+  }
+  (function () {
+    var sel = document.getElementById("suno-budget");
+    if (!sel) return;
+    try { var saved = localStorage.getItem("songshape.sunoBudget"); if (saved != null && sel.querySelector('option[value="' + saved + '"]')) sel.value = saved; } catch (e) { /* storage off */ }
+    sel.addEventListener("change", function () {
+      try { localStorage.setItem("songshape.sunoBudget", sel.value); } catch (e) { /* storage off */ }
+      if (lastSheet.full) putSheet(lastSheet.full, lastSheet.label); else updateSunoCount();
+    });
+  })();
+  function showSheet(r, label) {
+    r.fit = putSheet(r.lyrics, label || "Step 1 sheet");
+    if (r.fit && (r.fit.lyrics_over_budget || r.fit.line_tags_shortened)) setTimeout(function () { setStatus(SS.sunoBudgetNote(r.fit), "warn"); }, 0);
+    document.getElementById("map-style").value = r.style;
+    document.getElementById("map-notes").textContent = (r.fit && r.fit.shortened ? SS.sunoBudgetNote(r.fit) + "\n" : "") + r.notes;
+    var box = document.getElementById("map-output");
+    if (box.scrollIntoView) box.scrollIntoView({ behavior: "smooth", block: "center" });
+    return r;
+  }
+  function copyFrom(id, label) {
+    var v = document.getElementById(id).value;
+    if (!v) { setStatus("Nothing to copy yet. Run step 10 first.", "warn"); return; }
+    (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(v) : Promise.reject(new Error("no clipboard")))
+      .then(function () { setStatus("Copied the " + label + ".", "ok"); }, function () { var el = document.getElementById(id); el.focus(); el.select(); setStatus("Press Ctrl+C to copy the selected " + label + ".", "info"); });
+  }
+  document.getElementById("btn-copy-lyrics").addEventListener("click", function () { copyFrom("map-output", "lyrics"); });
+  document.getElementById("btn-copy-style").addEventListener("click", function () { copyFrom("map-style", "style prompt"); });
+  document.getElementById("btn-copy-extend").addEventListener("click", function () { copyFrom("extend-notes", "section notes"); });
+  // v0.2.11 fix6b: the two steps of Ben's story. Step 1 maps your lyrics onto the reference performance;
+  // Step 2 extends that style with sections marked [New ...], anywhere in the song.
+  document.getElementById("btn-step1-sheet").addEventListener("click", function () {
+    var mine = document.getElementById("new-lyrics").value;
+    if (!mine.trim()) { setStatus("Step 1: paste your lyrics first.", "warn"); return; }
+    try {
+      var r = showSheet(localSheet(mine));
+      setStatus("Step 1 done: your lyrics are mapped to the reference performance. Copy the sheet from Lyrics for Suno. " + (r.fit ? SS.sunoBudgetNote(r.fit) + " " : "") + (r.extend ? r.extend.notes.split("\n")[0] : ""), r.fit && r.fit.lyrics_over_budget ? "warn" : "ok");
+    } catch (err) { setStatus(err.message || String(err), "warn"); }
+  });
+  document.getElementById("extend-lyrics").addEventListener("input", function (ev) { session.extend_lyrics = ev.target.value; });
+  document.getElementById("btn-extend-from-step1").addEventListener("click", function () {
+    var box = document.getElementById("extend-lyrics"), mine = document.getElementById("new-lyrics").value;
+    if (!mine.trim()) { setStatus("Paste your Step 1 lyrics first.", "warn"); return; }
+    if (box.value.trim() && box.value !== mine && !confirm("Replace your Step 2 text with your Step 1 lyrics?")) return;
+    box.value = mine; session.extend_lyrics = mine; box.focus();
+    setStatus("Step 2: add each new section where you want it, with a line such as [New Verse] above it, then click Extend in that style.", "info");
+  });
+  function mappedLines(text) {
+    return SS.parseExtendBlocks(text).filter(function (b) { return !b.marked_new; })
+      .reduce(function (a, b) { return a.concat(b.texts); }, []).map(function (l) { return l.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(); });
+  }
+  // v0.2.11 fix6d: vocal performance JSON for each step (for a reasoning AI helping with tag mapping).
+  function downloadVocalJson(step) {
+    var text = step === 2 ? document.getElementById("extend-lyrics").value : document.getElementById("new-lyrics").value;
+    if (!text.trim()) { setStatus(step === 2 ? "Step 2: add your extended lyrics first." : "Step 1: paste your lyrics first.", "warn"); return; }
+    try {
+      syncReferenceFromFields();
+      ensureLyricsFromBox();
+      var lift = step === 2 && !!(document.getElementById("chk-extend-lift") || {}).checked;
+      var m = fullHandoff(text, { lift: lift });
+      var b = sunoBudget();
+      var fit = b && SS.fitSunoBudget ? SS.fitSunoBudget(m.handoff.lyrics, { budget: b }) : null;
+      var json = SS.buildPerformanceJson({ map: m.map, transfer: m.transfer, handoff: m.handoff, refs: m.extend ? m.extend.refs : [], step: step, sheet: fit,
+        includeReferenceText: !!(document.getElementById("chk-json-ref-text") || {}).checked, appVersion: SS.APP_VERSION });
+      downloadBlob(new Blob([JSON.stringify(json, null, 1)], { type: "application/json" }), "songshape-step" + step + "-vocal-performance.json");
+      setStatus("Saved the Step " + step + " vocal performance JSON (" + json.sections.length + " sections" + (lift ? ", Lift on" : "") + "). Nothing was sent; no audio is inside." +
+        (json.contains_reference_lyric_text ? " It includes the reference lyric lines: keep it private." : ""), "ok");
+    } catch (err) { setStatus(err.message || String(err), "warn"); }
+  }
+  document.getElementById("btn-step1-json").addEventListener("click", function () { downloadVocalJson(1); });
+  document.getElementById("btn-step2-json").addEventListener("click", function () { downloadVocalJson(2); });
+  document.getElementById("chk-extend-lift").addEventListener("change", function () {
+    if (lastSheet.label === "Step 2 sheet") document.getElementById("btn-step2-sheet").click();
+  });
+  document.getElementById("btn-step2-sheet").addEventListener("click", function () {
+    var text = document.getElementById("extend-lyrics").value, mine = document.getElementById("new-lyrics").value;
+    var check = document.getElementById("extend-check");
+    if (!text.trim()) { setStatus("Step 2: click Start from my Step 1 lyrics, then add sections marked [New Verse] (or [New Chorus], [New]).", "warn"); return; }
+    try {
+      var notes = [];
+      if (mine.trim()) {
+        var a = mappedLines(mine), b = mappedLines(text), i = 0;
+        while (i < a.length && i < b.length && a[i] === b[i]) i += 1;
+        if (i < a.length || i < b.length) notes.push("Outside the [New …] sections your Step 2 lyrics differ from Step 1 (first at Step 1 line " + (i + 1) + "); the sheet uses the Step 2 text as written.");
+      }
+      var lift = !!(document.getElementById("chk-extend-lift") || {}).checked;
+      var r = showSheet(localSheet(text, { lift: lift }), "Step 2 sheet");
+      if (lift) notes.push("Lift is on: new sections are stepped up (see the JSON for what changed).");
+      var plan = r.extend ? r.extend.plan : [];
+      var added = plan.filter(function (p) { return !p.mapped; });
+      notes.unshift(added.length ? added.length + " new section(s): " + added.map(function (p) {
+        return p.label + " \u201c" + (p.block.texts[0] || "") + "\u201d" + (p.inherits_from != null ? " (tags of your " + plan[p.inherits_from].label + ")" : p.ref ? " (tags of the reference " + p.ref.label + ")" : "");
+      }).join("; ") + "." : "No section is marked new yet: put a line such as [New Verse] above each added section.");
+      check.textContent = notes.join(" ");
+      setStatus("Step 2 done: extended sheet in Lyrics for Suno. " + notes[0] + (r.fit ? " " + SS.sunoBudgetNote(r.fit) : ""), added.length && !(r.fit && r.fit.lyrics_over_budget) ? "ok" : "warn");
+    } catch (err) { setStatus(err.message || String(err), "warn"); }
+  });
+  function stageResult(text) { var el = document.getElementById("stage-result"); el.hidden = !text; el.textContent = text || ""; }
   document.getElementById("btn-map-sheet").addEventListener("click", function () {
     var mine = document.getElementById("new-lyrics").value;
-    document.getElementById("map-output").value = localSheet(mine).text;
+    showSheet(localSheet(mine));
     setStatus("Built a contour-directed draft locally. Review warnings and syllable fit; no AI or audio upload.", "ok");
   });
   // Stage 4 with AI: the one send-and-check path (same as the CLI ai-sheet).
@@ -1343,10 +1681,10 @@
     document.getElementById("map-output").value = "Sending…";
     setStatus("Sending the mapping request to your endpoint. The key is not written into any export.", "info");
     aiSheet(mine).then(function (res) {
-      document.getElementById("map-output").value = res.text;
+      putSheet(res.text, "AI sheet");
       setStatus("Validated the model’s lyric sheet. It was not executed — only shown. " + sheetCheckNote(res.check), res.check.ok ? "ok" : "warn");
     }).catch(function (err) {
-      document.getElementById("map-output").value = "";
+      document.getElementById("map-output").value = ""; lastSheet = { full: "", label: "" }; updateSunoCount();
       setStatus((err.message || String(err)) + localFetchHint(), "warn");
     });
   });
@@ -1398,6 +1736,8 @@
     var pct = Math.max(0, Math.min(100, Math.round(percent || 0)));
     if (text) text.textContent = (label || "Measuring pitch…") + " " + pct + "%";
     if (bar) bar.value = pct;
+    var g2 = document.getElementById("g-status-2");
+    if (g2 && g2.dataset.state === "running") g2.textContent = (label || "Measuring pitch…") + " " + pct + "%";
   }
 
   function hideDraftProgress() {
@@ -1534,11 +1874,11 @@
           setStatus("Measuring pitch… " + p.percent + "%", "info");
         }
       };
-      SS.analyzePitchLoudnessAsync(samples, buf.sampleRate, opts).then(function (frames) {
+      SS.analyzePitchLoudnessAsync(samples, buf.sampleRate, Object.assign(opts, {silenceRms: SS.adaptiveSilenceRms(samples, buf.sampleRate)})).then(function (frames) {
         if (cancel.canceled) return;
-        var draft = SS.buildDraft(frames, { baselineHz: fixedBaselineHz });
+        var draft = SS.buildDraft(frames, { baselineHz: session.vocal_range ? null : fixedBaselineHz, range: session.vocal_range, cleanup: true });
         session.draft = draft;
-        document.getElementById("draft-baseline-hz").value = String(Number(draft.baseline_hz.toFixed(4)));
+        if (!session.vocal_range) document.getElementById("draft-baseline-hz").value = String(Number(draft.baseline_hz.toFixed(4)));
         var n = draft.strokes ? draft.strokes.length : 0;
         revealDraft(draft, planned);
         finishDraftJob();
@@ -1713,9 +2053,9 @@
     var samples = new Float32Array(audio.getChannelData(0));
     setStatus("Measuring the pitch contour locally for the AI request…", "info");
     return SS.analyzePitchLoudnessAsync(samples, audio.sampleRate, {
-      winMs: 40, hopMs: 30, startMs: 0, endMs: Math.floor(audio.duration * 1000), cancel: { canceled: false }
+      winMs: 40, hopMs: 30, silenceRms: SS.adaptiveSilenceRms(samples, audio.sampleRate), startMs: 0, endMs: Math.floor(audio.duration * 1000), cancel: { canceled: false }
     }).then(function (frames) {
-      session.draft = SS.buildDraft(frames);
+      session.draft = SS.buildDraft(frames, { cleanup: true });
       return SS.audioFeatures(session.draft, Math.round(audio.duration * 1000));
     });
   }
@@ -1766,8 +2106,8 @@
     if (!el) return;
     var total = session.strokes.filter(SS.isAiStroke).length;
     var open = SS.countUnconfirmedAi(session);
-    el.textContent = total ? open + " of " + total + " AI-drafted stroke(s) unconfirmed. Unconfirmed strokes are flagged for review in stages 3–4 (or left out if you tick the option in the guided panel)."
-      : "AI-drafted strokes are flagged for review in stages 3–4 until you confirm them.";
+    el.textContent = total ? open + " of " + total + " AI-drafted stroke(s) unconfirmed. Unconfirmed strokes are flagged for review in steps 9–10 (or left out if you tick the option in the guided panel)."
+      : "AI-drafted strokes are flagged for review in steps 9–10 until you confirm them.";
   }
   document.getElementById("btn-confirm-ai-stroke").addEventListener("click", function () {
     var id = renderer.view.selectedId;
@@ -1775,7 +2115,7 @@
     if (!s || !SS.isAiStroke(s)) { setStatus("Select an AI-drafted (dashed) stroke first: pause and click it, or pick it in the list.", "warn"); return; }
     SS.confirmAiStroke(session, id);
     refreshStrokeList(); draw();
-    setStatus("Confirmed " + id + ". It now counts as reviewed in stages 3–4.", "ok");
+    setStatus("Confirmed " + id + ". It now counts as reviewed in steps 9–10.", "ok");
   });
   document.getElementById("btn-confirm-all-ai").addEventListener("click", function () {
     var n = SS.confirmAllAiStrokes(session);
@@ -1818,35 +2158,194 @@
     var el = document.getElementById("g-status-" + n);
     el.dataset.state = state;
     el.textContent = text;
+    // v0.2.11 fix7: a visible "it ran" signal: time of the last run and a short highlight on the card.
+    var when = document.getElementById("g-when-" + n), card = el.closest ? el.closest("li") : null;
+    if (when) when.textContent = state === "running" ? "Running…" : state === "todo" ? "" : "Last run " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+    if (card && (state === "done" || state === "review" || state === "error")) {
+      card.classList.remove("g-updated"); void card.offsetWidth; card.classList.add("g-updated");
+    }
   }
   function gMessage(text) { document.getElementById("g-message").textContent = text || ""; }
   function aiReady(box) {
     var cfg = SS.getAiConfig ? SS.getAiConfig() : {};
     return !!(document.getElementById(box).checked && cfg.enabled && cfg.baseUrl);
   }
+  function stage1Label(words) {
+    var byWord = {}, n = { hand: 0, tap: 0, aligner: 0, estimate: 0, other: 0 }, tapLines = {};
+    (session.anchors || []).forEach(function (a) { byWord[a.word_id] = a; });
+    var unplaced = [];
+    words.forEach(function (w) {
+      var a = byWord[w.id];
+      if (!a) { unplaced.push(w.text); return; }
+      if (!a.needs_review) n.hand += 1;
+      else if (a.tap_anchored) { n.tap += 1; tapLines[a.line_id] = 1; } // v0.2.11 fix7: words anchored to your line taps
+      else if (a.source === "imported_known_lyrics_alignment") n.aligner += 1;
+      else if (a.source === "cpu_energy_timing_estimate") n.estimate += 1;
+      else n.other += 1;
+    });
+    var parts = [];
+    if (n.hand) parts.push(n.hand + " checked");
+    if (n.tap) parts.push(n.tap + " anchored to your taps (" + Object.keys(tapLines).length + " line" + (Object.keys(tapLines).length === 1 ? "" : "s") + ", check by ear)");
+    if (n.aligner) parts.push(n.aligner + " by the aligner (check by ear)");
+    if (n.estimate) parts.push(n.estimate + " estimated (check by ear)");
+    if (n.other) parts.push(n.other + " imported (check by ear)");
+    // v0.2.11 fix6e: unplaced words may be hiding in a harmony section (Song Shape tracks the lead only).
+    var hint = "";
+    if (unplaced.length) {
+      refreshHarmony();
+      var hints = SS.unplacedHarmonyHints ? SS.unplacedHarmonyHints(session, session.detected_harmony || []) : [];
+      var near = hints.filter(function (h) { return h.harmony_region; }).map(function (h) { return SS.formatMmSs(h.near_ms); });
+      near = near.filter(function (t, i) { return near.indexOf(t) === i; });
+      hint = near.length ? " - may be in a harmony section near " + near.slice(0, 3).join(", ") + "; check by ear" : " - may be in a harmony or backing part; check by ear";
+    }
+    return (words.length - unplaced.length) + " of " + words.length + " words placed" + (parts.length ? ": " + parts.join(", ") : "") +
+      (unplaced.length ? "; " + unplaced.length + " left unplaced (" + unplaced.slice(0, 6).join(" ") + (unplaced.length > 6 ? " \u2026" : "") + ")" + hint : "");
+  }
+  // ---- v0.2.11 fix6e: harmony hints (lead singer only; stacked voices are labelled, never tracked) ----
+  var stemRangeJob = null;
+  var harmonyEvidence = null; // per-frame evidence from the vocal stem (in memory only)
+  function lineSpansFromAnchors() {
+    var byLine = {}, text = {};
+    (session.lyrics && session.lyrics.lines || []).forEach(function (l) { text[l.id] = l.text; });
+    (session.anchors || []).forEach(function (a) {
+      if (!a.line_id || typeof a.start_ms !== "number") return;
+      var s = byLine[a.line_id] || (byLine[a.line_id] = { line_id: a.line_id, start_ms: a.start_ms, end_ms: a.start_ms, text: text[a.line_id] || "" });
+      s.start_ms = Math.min(s.start_ms, a.start_ms); s.end_ms = Math.max(s.end_ms, (a.end_ms || a.start_ms) + 400);
+    });
+    return Object.keys(byLine).map(function (k) { return byLine[k]; });
+  }
+  function refreshHarmony() {
+    if (!SS.detectHarmony) return;
+    if (!harmonyEvidence && (session.detected_harmony || []).some(function (r) { return r.source !== "words"; })) { renderHarmonyList(); return; } // kept from a loaded project
+    session.detected_harmony = SS.detectHarmony(null, 0, { frames: harmonyEvidence ? harmonyEvidence.frames : [], lineSpans: lineSpansFromAnchors() });
+    renderHarmonyList();
+  }
+  function renderHarmonyList() {
+    var ul = document.getElementById("harmony-list"), count = document.getElementById("harmony-count");
+    if (!ul) return;
+    var regions = session.detected_harmony || [];
+    var words = {}; (session.lyrics && session.lyrics.words || []).forEach(function (w) { words[w.id] = w.text; });
+    var hints = SS.unplacedHarmonyHints ? SS.unplacedHarmonyHints(session, regions) : [];
+    ul.innerHTML = "";
+    regions.forEach(function (r) {
+      var inside = (session.anchors || []).filter(function (a) { return a.start_ms >= r.start_ms && a.start_ms <= r.end_ms; })
+        .sort(function (p, q) { return p.start_ms - q.start_ms; }).map(function (a) { return words[a.word_id] || ""; }).filter(Boolean);
+      var miss = hints.filter(function (h) { return h.harmony_region === r.id; }).map(function (h) { return h.text; });
+      var li = document.createElement("li");
+      li.textContent = SS.formatMmSs(r.start_ms) + "–" + SS.formatMmSs(r.end_ms) + ": " + (r.reasons || []).join(", ") + (inside.length ? ". Words: " + inside.slice(0, 12).join(" ") + (inside.length > 12 ? " …" : "") : "") + (miss.length ? ". Possibly unplaced here: " + miss.join(" ") : "") + " ";
+      var b = document.createElement("span"); b.className = "badge-harmony"; b.textContent = "harmony"; li.appendChild(b);
+      ul.appendChild(li);
+    });
+    if (!regions.length) { var li = document.createElement("li"); li.textContent = harmonyEvidence ? "No stacked voices found in the vocal stem." : "Open a vocal stem (step 3) to look for harmony sections; overlapping placed lines are checked too."; ul.appendChild(li); }
+    if (count) count.textContent = regions.length ? "— " + regions.length + " possible harmony section(s)" : (harmonyEvidence ? "— none found" : "— open a vocal stem");
+  }
+  function renderVocalRange() {
+    var el = document.getElementById("vocal-range-label");
+    if (el) {
+      el.textContent = "";
+      if (session.vocal_range) {
+        var b = document.createElement("strong"); b.textContent = "Singer " + SS.vocalRangeLabel(session.vocal_range).replace(/^Range/, "range"); el.appendChild(b);
+        el.appendChild(document.createTextNode(" — the middle line. Lead only: 2nd–98th percentiles of confident frames, harmony excluded. Register labels (low to high) are relative to this range."));
+      } else el.textContent = "Singer range: open a vocal stem to measure the lead singer’s range and baseline.";
+    }
+    if (renderer && renderer.view) renderer.view.vocalRange = session.vocal_range || null;
+  }
+  function updateVocalRange(frames) {
+    var r = SS.measureVocalRange(frames, { harmonyRegions: session.detected_harmony || [] });
+    session.vocal_range = r;
+    var box = document.getElementById("draft-baseline-hz");
+    box.value = r ? String(r.baseline_hz) : ""; box.readOnly = !!r;
+    renderVocalRange(); draw();
+    return r;
+  }
+  function analyzeStemHarmony(buffer) {
+    harmonyEvidence = null; session.vocal_range = null;
+    document.getElementById("vocal-range-label").textContent = "Measuring the lead singer’s range…";
+    var loadedSession = session;
+    stemRangeJob = new Promise(function (resolve) { setTimeout(function () {
+      try {
+        var n = buffer.length, ch = buffer.numberOfChannels, mono = new Float32Array(n), c, i, d;
+        for (c = 0; c < ch; c++) { d = buffer.getChannelData(c); for (i = 0; i < n; i++) mono[i] += d[i] / ch; }
+        harmonyEvidence = SS.harmonyFrames(mono, buffer.sampleRate);
+        session.detected_harmony = [];
+        refreshHarmony();
+        if (renderer && renderer.draw) try { renderer.draw(session, player, recorder); } catch (e) { /* next frame */ }
+        // v0.2.11 fix6f: the lead singer's range; the Singer baseline is its midpoint.
+        SS.analyzePitchLoudnessAsync(mono, buffer.sampleRate, { winMs: 40, hopMs: 30, silenceRms: SS.adaptiveSilenceRms(mono, buffer.sampleRate) }).then(function (frames) {
+          if (session !== loadedSession || !stemAudio || stemAudio.buffer !== buffer) { resolve(); return; }
+          var r = updateVocalRange(frames);
+          stemStatus("done", "Stem ready: " + stemAudio.name + ". " + (r ? SS.vocalRangeLabel(r) + "." : "Not enough confident lead voice to measure a range."));
+          resolve();
+        }).catch(function (err) { document.getElementById("vocal-range-label").textContent = "Could not measure the range: " + (err && err.message || err); resolve(); });
+      } catch (err) { harmonyEvidence = null; resolve(); }
+    }, 30); });
+    stemRangeJob.then(function () { stemRangeJob = null; });
+  }
+  function stage1Review(words) {
+    var byWord = {};
+    (session.anchors || []).forEach(function (a) { byWord[a.word_id] = a; });
+    return words.some(function (w) { return !byWord[w.id] || byWord[w.id].needs_review; });
+  }
+  // v0.2.11 fix7: wait for anything still running (the rip / pipeline, a pitch measurement, the singer range)
+  // before a stage reads the session, so a click at 0:00 right after loading cannot race them.
+  var pipelineRunning = false;
+  function whenIdle(label) {
+    var waited = 0;
+    return new Promise(function (resolve, reject) {
+      (function check() {
+        if (stemRangeJob) { setStatus(label + ": waiting for the singer range…", "info"); var again = function () { setTimeout(check, 0); }; stemRangeJob.then(again, again); return; }
+        if (pipelineRunning || draftJob) {
+          if (waited > 900000) { reject(new Error(label + ": the tools are still running. Wait for them to finish, then click again.")); return; }
+          if (!waited) setStatus(label + ": waiting for the running tools to finish…", "info");
+          waited += 250; setTimeout(check, 250); return;
+        }
+        resolve();
+      })();
+    });
+  }
   function stage1() {
-    ensureLyricsFromBox();
-    if (!player.hasAudio()) throw new Error("Load the song (.wav or .mp3) first.");
-    var words = (session.lyrics && session.lyrics.words || []).filter(function (w) { return !w.skipped; });
-    if (!words.length) throw new Error("Paste the original lyrics in the Lyrics box first.");
-    var placed = (session.anchors || []).length;
-    if (placed < words.length) proposeWordPositions(false);
-    var review = (session.anchors || []).filter(function (a) { return a.needs_review; }).length;
-    return { state: review ? "review" : "done", text: session.anchors.length + " of " + words.length + " words placed" + (review ? ", " + review + " estimated (check by ear)" : "") };
+    return whenIdle("Place words").then(function () {
+      ensureLyricsFromBox();
+      if (!player.hasAudio()) throw new Error("Click Open audio and choose a song (.wav or .mp3) first.");
+      if (!(player.getWaveform && player.getWaveform())) throw new Error("The song is still being decoded. Wait a moment, then click Run again.");
+      var words = (session.lyrics && session.lyrics.words || []).filter(function (w) { return !w.skipped; });
+      if (!words.length) throw new Error("Paste the original lyrics in step 2 first.");
+      var tapped = SS.lineTaps(session).filter(function (t) { return !t.skipped; }).length;
+      // With taps and a connected aligner, re-align: the helper treats each tapped line start as a hard anchor.
+      var realign = !tapped ? Promise.resolve(null) : ensureHelper().then(function () {
+        if (!helperInfo || !helperInfo.aligner_configured || !stemAudio) return null;
+        return Promise.resolve(pipelineTools.place_words({})).then(function (r) { if (r && r.ok === false) throw new Error(r.error); return r; });
+      });
+      return realign.then(function () {
+        var anchors = session.anchors || [];
+        // v0.2.11 fix4: words the local aligner left unplaced (not heard) stay unplaced; never fill them with the
+        // whole-song CPU estimate. The CPU estimate only runs when nothing came from the aligner.
+        var aligned = anchors.some(function (a) { return a.source === "imported_known_lyrics_alignment"; });
+        if (anchors.length < words.length && !aligned) proposeWordPositions(false);
+        var t = tapped ? SS.applyTapAnchors(session, (session.audio && session.audio.duration_ms) || player.duration() * 1000) : null;
+        if (t) { refreshLyricsUi(); draw(); }
+        refreshHarmony();
+        var text = stage1Label(words);
+        if (t && t.skipped_lines.length) text += "; " + t.skipped_lines.length + " tapped line(s) had no room before the next line and were left as they were";
+        return { state: stage1Review(words) ? "review" : "done", text: text };
+      });
+    });
   }
   function stage2() {
-    if (!player.hasAudio()) return Promise.reject(new Error("Load the song first."));
+    if (!player.hasAudio()) return Promise.reject(new Error("Click Open audio first."));
     if (aiReady("chk-g-ai-draft")) {
       return aiDraftRun().then(function (r) {
         return { state: "review", text: "AI drafted " + r.strokes.length + " stroke(s) in " + r.chunks + " window(s)" + (r.failed.length ? ", " + r.failed.length + " failed" : "") + " — correct and confirm" };
       });
     }
     var hand = SS.humanStrokes(session).length;
-    if (hand) return Promise.resolve({ state: "done", text: "Using your " + hand + " hand stroke(s)" });
-    var machine = session.strokes.filter(function (x) { return (x.annotations || []).indexOf("machine_measured_pitch_draft") >= 0; }).length;
-    if (machine || session.strokes.some(SS.isAiStroke)) return Promise.resolve({ state: "review", text: "Keeping the existing drafted strokes" });
-    return runCpuContour({ placeWords: false }).then(function (n) {
-      return { state: "review", text: "CPU measured " + n + " contour segment(s) (no AI)" };
+    if (hand) return Promise.resolve({ state: "done", text: "Kept your " + hand + " hand stroke(s); nothing re-measured (delete them to measure the audio)" });
+    // v0.2.11: Run 2 always re-measures. Earlier unlinked CPU strokes are replaced; hand strokes return above
+    // and AI or word-linked strokes are kept.
+    return whenIdle("Draft the shape").then(function () { return runCpuContour({ placeWords: false }); }).then(function (n) {
+      var vr = session.vocal_range;
+      setStatus("Draft the shape finished: " + n + " contour segment(s) measured on the " + (stemAudio ? "vocal stem" : "song mix") + (vr ? ", baseline " + vr.baseline_note + " (range " + vr.low_note + "–" + vr.high_note + ")" : "") + ". The line is drawn on the plot.", "ok");
+      return { state: "review", text: "Measured " + n + " contour segment(s) on the " + (stemAudio ? "stem" : "song mix") + (vr ? ", baseline " + vr.baseline_note : "") + " — the line is on the plot (no AI)" };
     });
   }
   function stage3() {
@@ -1854,7 +2353,9 @@
     if (!mine.trim()) throw new Error("Paste your new lyrics in Map my lyrics first.");
     var r = localSheet(mine);
     var lines = r.mapped.handoff.rows.length;
-    return { state: r.review ? "review" : "done", text: lines + " line(s) fitted" + (r.review ? ", " + r.review + " flagged for review" : "") };
+    stageResult("9 · Fit your lyrics: " + lines + " of your lines fitted to the reference shape. " + (r.extend ? r.extend.notes.split("\n")[0] + " " : "") + (r.review ? r.review + " need your ear. " : "None need a timing check. ") +
+      (r.untagged ? r.untagged + " have no contour yet. " : "") + "Run step 10 to write the tagged sheet.\n" + r.notes.split("\n")[0]);
+    return { state: r.review ? "review" : "done", text: lines + " line(s) fitted" + (r.review ? ", " + r.review + " need your ear" : "") };
   }
   function stage4() {
     var mine = document.getElementById("new-lyrics").value;
@@ -1863,15 +2364,23 @@
     if (aiReady("chk-g-ai-sheet")) {
       out.value = "Sending…";
       return aiSheet(mine).then(function (res) {
-        out.value = res.text;
-        return { state: res.check.ok ? "done" : "review", text: "AI sheet ready. " + sheetCheckNote(res.check) };
+        if (res.check.ok) {
+          putSheet(res.text, "AI sheet");
+          return { state: "done", text: "AI sheet ready. " + sheetCheckNote(res.check) };
+        }
+        // v0.2.11: a reply that fails the check never replaces the CPU sheet in the paste box.
+        showSheet(localSheet(mine));
+        var notes = document.getElementById("map-notes");
+        if (notes) notes.textContent = "The AI sheet failed the check and was not used (" + sheetCheckNote(res.check) + "). The CPU sheet is shown above.\n\n" + notes.textContent;
+        return { state: "review", text: "AI sheet failed the check; CPU sheet shown instead. " + sheetCheckNote(res.check) };
       }).catch(function (err) {
-        out.value = localSheet(mine).text;
+        showSheet(localSheet(mine));
         return { state: "review", text: "AI sheet failed (" + (err.message || err) + "); CPU sheet shown instead" };
       });
     }
-    out.value = localSheet(mine).text;
-    return Promise.resolve({ state: "done", text: "CPU sheet ready in Mapping output" });
+    var sheet = showSheet(localSheet(mine));
+    stageResult("10 · Export: the tagged lyrics are in “Lyrics for Suno” below (paste into Suno's lyrics box). The style prompt and notes are under it and are not part of the paste.");
+    return Promise.resolve({ state: "done", text: "Sheet ready below (" + sheet.lines + " lines)" });
   }
   var STAGES = [null, stage1, stage2, stage3, stage4];
   function runStage(n) {
@@ -1890,12 +2399,12 @@
     cont.hidden = true;
     guided.running = true;
     function step(k) {
-      if (k > 4) { guided.running = false; gMessage("All four stages finished. The tagged sheet is in Mapping output."); setStatus("Guided chain finished: all four stages ran. Review the flagged items, then copy the tagged sheet from Mapping output.", "ok"); return Promise.resolve("done"); }
+      if (k > 4) { guided.running = false; gMessage("Steps 7–10 finished. The tagged sheet is in Mapping output."); setStatus("Guided chain finished: steps 7–10 ran. Review the flagged items, then copy the tagged sheet from Mapping output.", "ok"); return Promise.resolve("done"); }
       return runStage(k).then(function () {
         if (k === 1 || k === 2) {
           guided.pausedAt = k; guided.running = false;
           cont.hidden = false;
-          gMessage("Paused after stage " + k + ": " + (k === 1 ? "listen and correct the word positions" : "listen and correct the shape (confirm AI strokes you keep)") + ", then click Continue.");
+          gMessage("Paused after step " + (k + 6) + ": " + (k === 1 ? "listen and correct the word positions" : "listen and correct the shape (confirm AI strokes you keep)") + ", then click Continue.");
           return "paused";
         }
         return step(k + 1);
@@ -1910,7 +2419,7 @@
   }
   [1, 2, 3, 4].forEach(function (n) {
     document.getElementById("btn-g-run-" + n).addEventListener("click", function () {
-      runStage(n).then(function (r) { setStatus("Stage " + n + ": " + r.text + ".", r.state === "done" ? "ok" : "info"); })
+      runStage(n).then(function (r) { setStatus("Step " + (n + 6) + ": " + r.text + ".", r.state === "done" ? "ok" : "info"); })
         .catch(function (err) { setStatus(err.message || String(err), "warn"); });
     });
   });
@@ -1986,10 +2495,12 @@
   // v0.2.8: shared by the button and guided stage 2. Resolves with the number of measured segments.
   function runCpuContour(o) {
     o = o || {};
+    if (stemRangeJob) return stemRangeJob.then(function () { return runCpuContour(o); });
     return new Promise(function (resolve, reject) {
       if(draftJob){reject(new Error('An audio-analysis job is already running.'));return;}
-      var audio=player.getAudioBuffer && player.getAudioBuffer();
-      if(!audio){handleNoAudioDraft();reject(new Error('Load the song first.'));return;}
+      // v0.2.11: measure the vocal stem when one is open (Stage 0); the song stays the playback track.
+      var audio=(stemAudio&&stemAudio.buffer)||(player.getAudioBuffer && player.getAudioBuffer());
+      if(!audio){handleNoAudioDraft();reject(new Error('Click Open audio first.'));return;}
       try {
         ensureLyricsFromBox();
         if(o.placeWords && !(session.anchors||[]).length && (session.lyrics && session.lyrics.words||[]).length) proposeWordPositions(false);
@@ -1997,7 +2508,7 @@
       var cancel={canceled:false};
       draftJob={cancel:cancel};setDraftRunning(true);setDraftProgress(0,'Analyzing full track…');
       var baselineText=document.getElementById('draft-baseline-hz').value.trim();
-      var baseline=baselineText?Number(baselineText):null;
+      var baseline=session.vocal_range ? null : (baselineText?Number(baselineText):null);
       if(baseline!==null && (!Number.isFinite(baseline)||baseline<40||baseline>20000)){
         finishDraftJob();reject(new Error('Reference frequency must be 40–20000 Hz.'));return;
       }
@@ -2006,14 +2517,17 @@
         try {samples=new Float32Array(audio.getChannelData(0));}
         catch(error){finishDraftJob();reject(error);return;}
         SS.analyzePitchLoudnessAsync(samples,audio.sampleRate,{
-          winMs:40,hopMs:30,startMs:0,endMs:Math.floor(audio.duration*1000),cancel:cancel,
+          winMs:40,hopMs:30,silenceRms:SS.adaptiveSilenceRms(samples,audio.sampleRate),startMs:0,endMs:Math.floor(audio.duration*1000),cancel:cancel,
           onProgress:function(p){setDraftProgress(p.percent,'Analyzing full track…');}
         }).then(function(frames){
           if(cancel.canceled){reject(new Error('Analysis canceled.'));return;}
-          var draft=SS.buildDraft(frames,{baselineHz:baseline});
+          // v0.2.11 fix6f: re-measure the range from this run (stem) with the current harmony regions.
+          if(stemAudio && audio===stemAudio.buffer) { refreshHarmony(); updateVocalRange(frames); }
+          var draft=SS.buildDraft(frames,{baselineHz:baseline,range:session.vocal_range,cleanup:true});
           session.draft=draft;
+          SS.removeUnlinkedMachineDraft(session);
           SS.acceptDraft(session);
-          document.getElementById('draft-baseline-hz').value=draft.baseline_hz?String(Number(draft.baseline_hz.toFixed(3))):'';
+          if(!session.vocal_range) document.getElementById('draft-baseline-hz').value=draft.baseline_hz?String(Number(draft.baseline_hz.toFixed(3))):'';
           revealDraft(draft,{onlyView:false,startMs:0,endMs:audio.duration*1000});
           finishDraftJob();refreshStrokeList();draw();
           resolve(draft.strokes.length);
@@ -2031,6 +2545,170 @@
         'Use Preview visual handoff to inspect the result.','ok');
     }).catch(function(error){
       setStatus(error.message||String(error), /canceled/.test(error.message)?'info':'warn');
+    });
+  });
+
+  // ---------------------------------------------------------------- v0.2.11 Stage 0: vocal stem + tools
+  var stemAudio = null; // {buffer: AudioBuffer, name, bytes: ArrayBuffer, audioId}
+  function stemStatus(state, text) { var el = document.getElementById("stem-status"); el.dataset.state = state; el.textContent = text; }
+  function decodeStem(bytes, name) {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    var ctx = new Ctx();
+    return ctx.decodeAudioData(bytes.slice(0)).then(function (buffer) {
+      try { ctx.close(); } catch (e) {}
+      var songMs = (session.audio && session.audio.duration_ms) || 0;
+      var stemMs = Math.round(buffer.duration * 1000);
+      stemAudio = { buffer: buffer, name: SS.sanitizeLabel(name, SS.MAX_STRING_LEN) || "vocal stem", bytes: bytes, audioId: null };
+      analyzeStemHarmony(buffer);
+      var mismatch = songMs && Math.abs(songMs - stemMs) > 1500;
+      stemStatus(mismatch ? "review" : "done", "Measuring the stem: " + stemAudio.name + " (" + formatTime(buffer.duration) + ")" + (mismatch ? ". Its length differs from the song by " + (Math.abs(songMs - stemMs) / 1000).toFixed(1) + " s, so check it is the same recording." : ""));
+      return stemAudio;
+    });
+  }
+  document.getElementById("btn-open-stem").addEventListener("click", function () { document.getElementById("file-stem").click(); });
+  document.getElementById("file-stem").addEventListener("change", function (ev) {
+    var file = ev.target.files && ev.target.files[0]; ev.target.value = "";
+    if (!file) return;
+    if (!SS.isSupportedAudioFile(file)) { setStatus(SS.SUPPORTED_AUDIO_MESSAGE, "warn"); return; }
+    file.arrayBuffer().then(function (bytes) {
+      SS.validateAudio(file.name || "", bytes); // throws on anything but WAV/MP3
+      return decodeStem(bytes, file.name);
+    }).then(function () {
+      setStatus("Vocal stem open. Step 8 and the tools now measure the stem; playback stays on the song. Run step 8 again to re-measure.", "ok");
+    }).catch(function (e) { setStatus("Could not open the stem: " + (e.message || e), "warn"); });
+  });
+  document.getElementById("btn-clear-stem").addEventListener("click", function () {
+    stemAudio = null; harmonyEvidence = null; session.detected_harmony = []; session.vocal_range = null; document.getElementById("draft-baseline-hz").readOnly = false; renderVocalRange(); refreshHarmony(); stemStatus("todo", "No stem: measuring the song mix");
+    setStatus("Measuring the song mix again. Run step 8 to re-measure.", "info");
+  });
+  function helperCfg() { return { baseUrl: document.getElementById("helper-url").value.trim(), token: document.getElementById("helper-token").value.trim() }; }
+  var helperInfo = null;
+  // v0.2.11: the tools check the helper themselves when an address and token are filled in.
+  function ensureHelper() {
+    if (helperInfo) return Promise.resolve(helperInfo);
+    var cfg = helperCfg();
+    if (!cfg.baseUrl || !cfg.token) return Promise.resolve(null);
+    return SS.helperHealth(cfg).then(function (h) { helperInfo = h; return h; }, function (e) { helperInfo = null; setStatus("Helper check failed: " + (e.message || e), "warn"); return null; });
+  }
+  ["helper-url", "helper-token"].forEach(function (id) { document.getElementById(id).addEventListener("input", function () { helperInfo = null; }); });
+  document.getElementById("btn-helper-check").addEventListener("click", function () {
+    SS.helperHealth(helperCfg()).then(function (h) {
+      helperInfo = h;
+      // v0.2.11 fix6: each tool with its path; a missing one says "not found".
+      var list = document.getElementById("helper-tools"), tools = Array.isArray(h.tools) ? h.tools : [];
+      if (list) {
+        list.textContent = "";
+        if (h.tools_home) { var home = document.createElement("li"); home.textContent = "Tools home: " + h.tools_home; list.appendChild(home); }
+        tools.forEach(function (t) {
+          var li = document.createElement("li");
+          li.textContent = (t.found ? "found: " : "NOT FOUND: ") + t.name + " — " + (t.path || "(no path)");
+          if (!t.found) li.style.color = "#b45309";
+          list.appendChild(li);
+        });
+      }
+      var missing = tools.filter(function (t) { return !t.found; });
+      setStatus("Helper ready: separator " + (h.separator_configured ? "configured" : "not configured") + ", aligner " + (h.aligner_configured ? "configured" : "not configured") + "." +
+        (missing.length ? " Not found: " + missing.map(function (t) { return t.name; }).join(", ") + " (paths listed under Check helper; fix SongShape_Tools\\songshape-tools.json, then restart Song Shape)." : tools.length ? " All " + tools.length + " tools found." : ""), missing.length ? "warn" : "ok");
+    }).catch(function (e) { helperInfo = null; var l = document.getElementById("helper-tools"); if (l) l.textContent = ""; setStatus(e.message || String(e), "warn"); });
+  });
+  function logStep(name, state, result) {
+    var list = document.getElementById("pipeline-log");
+    var id = "pl-" + name;
+    var li = document.getElementById(id);
+    if (!li) { li = document.createElement("li"); li.id = id; list.appendChild(li); }
+    li.dataset.state = state;
+    var summary = state === "running" ? "running…" : result && result.ok === false ? (result.error || "failed") : result && result.summary ? result.summary : "done";
+    li.textContent = name.replace(/_/g, " ") + ": " + summary;
+  }
+  function wordsForAlign() {
+    var starts = SS.lineTapStarts(session);
+    return (session.lyrics && session.lyrics.words || []).filter(function (w) { return !w.skipped; }).map(function (w) {
+      var o = Object.assign({}, w); if (typeof starts[w.id] === "number") o.line_start_ms = starts[w.id]; return o;
+    });
+  }
+  var pipelineTools = {
+    load_song: function () {
+      if (!player.hasAudio()) return { ok: false, error: "No song is open. Click Open audio." };
+      ensureLyricsFromBox();
+      return { ok: true, song: session.audio && session.audio.name, duration_s: Math.round(((session.audio && session.audio.duration_ms) || 0) / 100) / 10,
+        stem_loaded: !!stemAudio, lyric_words: wordsForAlign().length,
+        summary: (session.audio && session.audio.name) + " (" + formatTime(player.duration()) + ")" + (stemAudio ? " + stem " + stemAudio.name + " (" + formatTime(stemAudio.buffer.duration) + ")" : "") + ", " + wordsForAlign().length + " lyric words" };
+    },
+    separate_vocals: function () {
+      if (stemAudio) return { ok: true, source: "stem_opened_by_user", summary: "using " + stemAudio.name + " (" + formatTime(stemAudio.buffer.duration) + ")" };
+      return ensureHelper().then(function () {
+      if (!helperInfo || !helperInfo.separator_configured) return { ok: false, error: "No vocal stem. Open one in step 3, or start the helper, paste its token and click Check helper (step 4)." };
+      if (!currentAudioFile) return { ok: false, error: "Open the song with Open audio first." };
+      return currentAudioFile.arrayBuffer().then(function (bytes) { return SS.helperSeparate(helperCfg(), bytes, currentAudioFile.name); })
+        .then(function (r) { return decodeStem(r.bytes, "vocals (helper)").then(function (st) { st.audioId = r.audioId; return { ok: true, source: "helper_separator", summary: "stem ripped locally (" + formatTime(st.buffer.duration) + ")" }; }); });
+      });
+    },
+    map_vocals: function () {
+      return runCpuContour({ placeWords: false }).then(function (n) {
+        var c = session.draft && session.draft.cleanup || {};
+        return { ok: true, segments: n, measured: stemAudio ? "vocal stem" : "song mix", cleanup: c, summary: n + " contour segment(s) on the " + (stemAudio ? "stem" : "mix") + "; " + (c.spikes_removed || 0) + " spike frames removed, " + (c.octave_folded || 0) + " octave jumps folded, " + (c.frames_bridged || 0) + " gap frames bridged" };
+      });
+    },
+    place_words: function (args) {
+      ensureLyricsFromBox();
+      var vowel = args && args.vowel_target === false ? false : document.getElementById("chk-vowel-target").checked;
+      var words = wordsForAlign();
+      if (!words.length) return { ok: false, error: "Paste the original lyrics first." };
+      var buf = (stemAudio && stemAudio.buffer) || player.getAudioBuffer();
+      var samples = buf ? buf.getChannelData(0) : null;
+      return ensureHelper().then(function () {
+      // v0.2.11: never fall back silently to the rough whole-song estimate (median error ~7 s on a real song).
+      if (!helperInfo || !helperInfo.aligner_configured) return { ok: false, error: "Words were not placed: the local aligner is not connected. Start the helper, paste its token in step 4 and click Check helper, then run again. (For a rough guess without it, use Estimate remaining words; expect errors of several seconds.)" };
+      if (!stemAudio) return { ok: false, error: "Words were not placed: no vocal stem. Open a vocal stem or let the helper rip one, then run again." };
+      {
+        var cfg = helperCfg();
+        var idP = stemAudio.audioId ? Promise.resolve(stemAudio.audioId) : SS.helperUpload(cfg, stemAudio.bytes, stemAudio.name).then(function (id) { stemAudio.audioId = id; return id; });
+        return idP.then(function (id) { return SS.helperAlign(cfg, id, words); }).then(function (data) {
+          var proposal = SS.proposeImportedAlignment(session, data, { vowelTarget: vowel, samples: samples, sampleRate: buf ? buf.sampleRate : 0, lineTaps: SS.lineTapStarts(session) });
+          // Reruns replace unconfirmed machine placements only; hand-checked placements are kept.
+          session.anchors = (session.anchors || []).filter(function (a) { return !a.needs_review || !/^(imported_known_lyrics_alignment|cpu_energy_timing_estimate|cpu_tap_anchored_estimate)$/.test(a.source || ''); });
+          var applied = SS.applyProposals(session, proposal);
+          refreshLyricsUi(); refreshTapUi(); draw();
+          var nh = proposal.not_heard || [], wl = proposal.weak_lines || [], vc = proposal.vocalise || [], sn = proposal.lines_snapped || [], sp = proposal.spread || [];
+          return { ok: true, method: "local_aligner" + (vowel ? "_vowel_target" : ""), added: applied.added, kept_hand_placed: applied.preserved, not_heard: nh, weak_lines: wl, vocalise: vc, lines_snapped: sn, held: proposal.held || [], spread: sp,
+            summary: applied.added + " word(s) placed by the local aligner" + (vowel ? " on the vowel" : "") + ", " + applied.preserved + " hand-placed kept" +
+              (nh.length ? "; " + nh.length + " not heard in the audio, left unplaced (" + nh.slice(0, 8).join(" ") + "): check the lyrics match what is sung" : "") +
+              (wl.length ? "; check by ear (weak match): " + wl.slice(0, 6).map(function (l) { return "\u201c" + l.text + "\u201d at " + formatTime(l.start_ms / 1000); }).join(", ") : "") +
+              (sp.length ? "; check by ear (word spread over a long gap): " + sp.slice(0, 6).map(function (w) { return w.text + " at " + formatTime(w.start_ms / 1000); }).join(", ") : "") +
+              (vc.length ? "; vocalise words placed loosely, check by ear: " + vc.slice(0, 8).join(" ") : "") +
+              (sn.length ? "; " + sn.length + " line start(s) moved to the vocal onset after a pause" : "") +
+              (proposal.taps_used ? "; " + proposal.taps_used + " tapped line start(s) used as anchors" : "") +
+              (wl.length || sp.length ? "; tap line starts to help (step 6), then run step 7 again" : "") +
+              (proposal.studio_hint ? ". For best results use the studio master recording, not a live performance." : "") };
+        });
+      }
+      });
+    },
+    review: function () {
+      var r = SS.reviewWords(session);
+      r.summary = r.hand_placed + " hand-placed, " + r.machine_placed + " machine-placed, " + r.words_without_contour + " word(s) with no contour nearby" + (r.unplaced.length ? ", " + r.unplaced.length + " unplaced" : "");
+      return r;
+    }
+  };
+  function finishPipeline(r) {
+    var ok = r && r.ok;
+    setStatus(ok ? "Tools finished" + (r.driver === "ai" ? " (driven by the local AI)" : "") + ". Listen to the flagged words, then run steps 7–10 (7 re-places with any taps)." : "Pipeline stopped" + (r && r.stoppedAt ? " at " + r.stoppedAt : "") + ": " + (r && (r.error || (r.log && r.log.length && r.log[r.log.length - 1].result.error)) || "see the list"), ok ? "ok" : "warn");
+    if (r && r.summary) gMessage(r.summary);
+  }
+  document.getElementById("btn-pipeline-cpu").addEventListener("click", function () {
+    document.getElementById("pipeline-log").textContent = "";
+    pipelineRunning = true;
+    SS.runPipelineWithoutAi(pipelineTools, { onStep: logStep }).then(function (r) { pipelineRunning = false; finishPipeline(r); }, function (e) { pipelineRunning = false; setStatus(e.message || String(e), "warn"); });
+  });
+  document.getElementById("btn-pipeline-ai").addEventListener("click", function () {
+    var cfg = SS.getAiConfig ? SS.getAiConfig() : {};
+    if (!cfg.enabled || !cfg.baseUrl) { setStatus("Connect a local AI first (AI connection panel), then try again. Or use Run the tools.", "warn"); return; }
+    document.getElementById("pipeline-log").textContent = "";
+    var send = function (messages, opts) { return SS.sendAiChatAsync(messages, Object.assign({ timeoutMs: 180000 }, opts)); };
+    pipelineRunning = true;
+    SS.runPipelineWithAi(pipelineTools, send, { onStep: logStep }).then(function (r) { pipelineRunning = false; finishPipeline(r); }, function (e) {
+      pipelineRunning = false;
+      setStatus("The AI run failed (" + (e.message || e) + "). The tools that ran are kept; Run the tools works without AI.", "warn");
     });
   });
 

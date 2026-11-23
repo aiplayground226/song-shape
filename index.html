@@ -27,6 +27,7 @@
           <button type="button" id="btn-load-demo">Load demo tone</button>
           <button type="button" id="btn-load-demo-mp3">Load demo MP3</button>
           <button type="button" id="btn-load-example">Load example traces</button>
+          <button type="button" id="btn-save-top" title="Save the whole project as JSON (same as Export JSON). Audio is not included.">Save project (.json)</button>
         </div>
         <div id="audio-label" class="audio-label">No audio loaded. Open a .wav or .mp3, or drag one onto this page. Files are decoded locally by your browser.</div>
         <input id="file-audio" class="sr-only" type="file" accept=".wav,.mp3,audio/wav,audio/x-wav,audio/mpeg">
@@ -50,6 +51,7 @@
         <button type="button" data-rate="0.75">0.75×</button>
         <button type="button" data-rate="1" class="on">1×</button>
         <button type="button" id="btn-loop" title="Drag the time ruler to set a loop">Loop</button>
+        <button type="button" id="btn-clear-loop" title="Clear the loop (L)">Clear loop</button>
       </div>
     </div>
 
@@ -71,55 +73,139 @@
     <p id="status" data-kind="info"></p>
 
     <section id="guided" class="guided" aria-labelledby="guided-title">
-      <h2 id="guided-title">Guided workflow — four stages</h2>
-      <p class="hint">Runs on the CPU alone. If you connect an AI (below), stage 2 and stage 4 can use it. Load the song, paste the <strong>original lyrics</strong> (optional, if you have them) and <strong>your replacement lyrics</strong> into the two boxes on the right, then run each stage or <strong>Run all</strong>, which pauses for your review after stages 1 and 2.</p>
+      <h2 id="guided-title">Guided workflow — ten steps, top to bottom</h2>
+      <p class="hint">Work down the numbered steps. Steps 4, 5 and 6 are optional (4–5 need the local helper on your own PC; 6 is tapping). Everything runs on the CPU in this tab; if you connect an AI (below), steps 8 and 10 can use it. <strong>Run all</strong> runs steps 7–10 and pauses for your review after 7 and 8. Your replacement lyrics go in <strong>Map my lyrics</strong> below.</p>
       <details id="lyrics-format-help" class="format-help">
         <summary>How to paste lyrics</summary>
         <ul>
           <li><strong>Song Shape never downloads lyrics or songs.</strong> You load your own audio file and paste the lyrics yourself.</li>
-          <li><strong>Original lyrics</strong> (optional): the words of the reference song, if you have them. Without them, place words by clicking, or skip stage 1 and work from the shape only.</li>
-          <li><strong>Your replacement lyrics</strong>: the words you want sung with the same delivery.</li>
+          <li><strong>Original lyrics</strong> (optional): the words of the reference song, if you have them. Without them, place words by clicking, or skip step 7 and work from the shape only.</li>
+          <li><strong>Your replacement lyrics</strong>: the words you want sung with the same delivery (Step 1), then any new sections in that style (Step 2).</li>
           <li>One sung line per line. Leave a <strong>blank line between sections</strong>. Section names are optional — a line such as <code>[Chorus]</code> only marks where a section starts.</li>
           <li>Any <code>[bracket]</code> tags and clear performance cues in parentheses such as <code>(whispered)</code> are <strong>ignored</strong>. Song Shape writes its own tags: <code>[Verse]</code> / <code>[Chorus]</code> (a block that repeats is the chorus) and a <code>[Delivery: …]</code> line built from the measured rise and fall. Unclear parentheses such as <code>(oh oh)</code> stay as sung backing words and are flagged.</li>
           <li>Leave out titles, credits, chords and notes; they would be read as lyric lines.</li>
+          <li><strong>Leave out standalone dashes</strong> (<code>-</code>, <code>–</code>, <code>—</code>) between words: they break word timing, and Song Shape will ask you to remove them. Hyphenated words such as <code>well-known</code> are fine.</li>
         </ul>
       </details>
+      <ol class="flow" id="flow">
+        <li id="flow-1"><h3>1 · Open the song</h3>
+          <div class="cluster"><button type="button" class="primary" id="btn-flow-open">Open audio (.wav / .mp3)</button> <span class="hint" id="flow-audio-status">No song open yet.</span></div>
+          <p class="hint">Use the <strong>studio master recording</strong>, not a live performance. Files stay in this browser tab.</p>
+        </li>
+        <li id="flow-2"><h3>2 · Paste the original lyrics</h3>
+          <p class="hint">The reference song's lyrics, pasted by you (Song Shape never fetches lyrics). One sung line per line, a blank line between sections. [Bracket] tags and (performance cues) are ignored. <strong>Leave out standalone dashes (-, –, —)</strong>; hyphenated words are fine. Paste lyrics that match what is actually sung.</p>
+          <label class="field">Original lyrics (paste)
+            <textarea id="lyrics-text" rows="8" placeholder="One sung line per line.&#10;Blank line between sections.&#10;&#10;Tags in [brackets] are ignored."></textarea>
+          </label>
+          <p class="hint" id="lyrics-input-note" aria-live="polite"></p>
+          <label class="hint"><input type="checkbox" id="chk-place-parentheses"> Place (parenthesis) words</label>
+          <p class="hint">Words in (parentheses) are backing vocals / ad-libs and are not placed unless you turn this on. Bracket cues such as [hold] or [pause: 1 bar] are never placed.</p>
+        </li>
+        <li id="flow-3"><h3>3 · Choose what to measure: the song or your own vocal stem</h3>
+          <p class="hint">An isolated lead vocal measures far better than the full mix. <strong>Have your own vocal stem?</strong> Open it here: no GPU and no helper needed (skip steps 4 and 5 if you also place words another way). <strong>No stem?</strong> Steps 4–5 rip one on your own PC with the helper that comes in the Song Shape download. Playback always stays on the song.</p>
+          <div class="cluster">
+            <button type="button" id="btn-open-stem">Open vocal stem (.wav / .mp3)</button>
+            <button type="button" id="btn-clear-stem">Use the song instead</button>
+            <input id="file-stem" class="sr-only" type="file" accept=".wav,.mp3,audio/wav,audio/x-wav,audio/mpeg">
+            <span class="g-status" id="stem-status" data-state="todo">No stem: measuring the song mix</span>
+          </div>
+        </li>
+        <li id="flow-4"><h3>4 · Local helper token and Check helper <span class="local-tag">optional · your own PC only</span></h3>
+          <p class="hint"><strong>Using Song Shape on the website? Skip steps 4 and 5</strong> — there is no token there; the helper runs only on your own computer. On your PC, start <strong>Start-SongShape.cmd</strong> in this Song Shape folder (Windows); it uses the shared tools in <code>SongShape_Tools</code> (ffmpeg, Demucs, the aligner models), lists any that are not found and prints a token. Or start <code>tools/helper/songshape_helper.py</code> yourself (see tools/helper/README.md). It listens on 127.0.0.1 only. Audio goes only to that helper, only when you click. The token stays in this tab.</p>
+          <div class="cluster">
+            <label class="hint">Helper <input type="text" id="helper-url" value="http://127.0.0.1:8766" spellcheck="false" style="width:13rem"></label>
+            <label class="hint">Token <input type="password" id="helper-token" autocomplete="off" style="width:13rem"></label>
+            <button type="button" id="btn-helper-check">Check helper</button>
+          </div>
+          <ul class="hint" id="helper-tools" aria-live="polite"></ul>
+        </li>
+        <li id="flow-5"><h3>5 · Rip the vocals and place the words <span class="local-tag">needs the helper</span></h3>
+          <p class="hint">Runs five tools in order; each turns green when done: load song → separate vocals → map vocals → place words → review. With your own stem from step 3, the rip is skipped.</p>
+          <div class="cluster">
+            <label class="hint"><input type="checkbox" id="chk-vowel-target" checked> Word start on the vowel (1st vowel, or the 2nd of a double vowel)</label>
+          </div>
+          <div class="cluster">
+            <button type="button" class="primary" id="btn-pipeline-cpu">Run the tools: rip → map → place words</button>
+            <button type="button" id="btn-pipeline-ai">Let the local AI run the tools</button>
+          </div>
+          <p class="hint">“Let the local AI run the tools” needs a connected model that supports tool calling (LM Studio, Ollama, llama.cpp server). The AI only chooses and checks the steps; the tools do all the measuring.</p>
+        <ol class="pipeline-log" id="pipeline-log"></ol>
+        </li>
+        <li id="flow-6"><h3>6 · Tap line starts <span class="optional-tag">optional</span></h3>
+          <details id="tap-panel">
+          <summary>Tap one key at the start of each lyric line to help place the words (skip this step if the words already look right)</summary>
+          <p class="tap-rule" id="tap-rule"><strong>One tap per line:</strong> tap once at the first sound of each lyric line. Don't tap line ends — the next line's tap marks where this one ends.</p>
+          <p class="tap-next-big" id="tap-next-big">Next to tap: —</p>
+          <p class="hint tap-warn" id="tap-warn" hidden></p>
+          <p class="hint">Click <strong>Start tapping</strong>, play the song, and press <strong>Enter</strong> (or Space) once at each lyric line's first sound. Backspace or Ctrl+Z undoes the last tap. Click <strong>Skip line</strong> for a line you want left automatic. Taps show in purple on the timeline and save with the project. Tapping does not place words by itself: afterwards click <strong>7 · Place the original words</strong> once more and it re-places the words using your taps as anchors.</p>
+          <div class="cluster">
+            <button type="button" id="btn-tap-start">Start tapping</button>
+            <button type="button" id="btn-tap-play">Play / pause</button>
+            <button type="button" id="btn-tap-mark">Tap this line (Enter)</button>
+            <button type="button" id="btn-tap-skip">Skip line</button>
+            <button type="button" id="btn-tap-undo">Undo tap</button>
+            <button type="button" id="btn-tap-clear">Clear taps</button>
+            <label class="hint">Tap correction (ms) <input type="number" id="tap-latency" min="-1000" max="1000" step="10" value="-120" style="width:5rem"></label>
+          </div>
+          <p class="hint" id="tap-next" aria-live="polite">No taps yet.</p>
+          <p class="hint">−120 ms compensates a typical reaction delay, not a measured guarantee. If your taps sound late, make it more negative; use 0 if you anticipate the line. Changes apply only to new taps. Use Undo or Clear to redo.</p>
+          </details>
+        </li>
+        <li id="flow-stages" class="flow-stages"><h3>7–10 · The stages</h3>
+      <p class="hint vocal-range" id="vocal-range-label" aria-live="polite">Singer range: open a vocal stem to measure the lead singer’s range and baseline.</p>
+      <p class="hint lead-only" id="lead-disclaimer"><strong>Lead singer only.</strong> Song Shape is designed to track a single lead singer performance. Harmonies, backing vocals and choir parts are not tracked. Where the vocal stem sounds like stacked voices, the plot shows a purple <em>harmony?</em> band and an <strong>H</strong> badge on the words inside it. A word left unplaced may be hiding in a harmony section: listen there.</p>
       <ol class="guided-steps">
-        <li><span class="g-name">1 · Place the original words</span> <span class="g-status" id="g-status-1" data-state="todo">Not run</span> <button type="button" id="btn-g-run-1">Run</button></li>
-        <li><span class="g-name">2 · Draft the shape</span> <span class="g-status" id="g-status-2" data-state="todo">Not run</span> <button type="button" id="btn-g-run-2">Run</button></li>
-        <li><span class="g-name">3 · Fit the new lyrics</span> <span class="g-status" id="g-status-3" data-state="todo">Not run</span> <button type="button" id="btn-g-run-3">Run</button></li>
-        <li><span class="g-name">4 · Final tagged sheet for Suno</span> <span class="g-status" id="g-status-4" data-state="todo">Not run</span> <button type="button" id="btn-g-run-4">Run</button></li>
+        <li><span class="g-name">7 · Place the original words</span> <p class="g-hint" id="g-hint-1">If you did the tapping step, click this once more so it re-places the words using your taps as anchors.</p> <span class="g-status" id="g-status-1" data-state="todo">Not run</span> <button type="button" id="btn-g-run-1">Run</button> <span class="g-when" id="g-when-1"></span></li>
+        <li><span class="g-name">8 · Draft the shape</span> <p class="g-hint">Measures the vocal line (the stem when one is open) and draws it on the plot.</p> <span class="g-status" id="g-status-2" data-state="todo">Not run</span> <button type="button" id="btn-g-run-2">Run</button> <span class="g-when" id="g-when-2"></span></li>
+        <li><span class="g-name">9 · Fit your lyrics</span> <p class="g-hint">Paste your lyrics in Map my lyrics below first.</p> <span class="g-status" id="g-status-3" data-state="todo">Not run</span> <button type="button" id="btn-g-run-3">Run</button> <span class="g-when" id="g-when-3"></span></li>
+        <li><span class="g-name">10 · Export: final tagged sheet for Suno</span> <p class="g-hint">Then copy the sheet or download the JSON.</p> <span class="g-status" id="g-status-4" data-state="todo">Not run</span> <button type="button" id="btn-g-run-4">Run</button> <span class="g-when" id="g-when-4"></span></li>
       </ol>
+      <details id="harmony-panel" class="harmony-panel"><summary>Harmony check for step 7 (hints, lead singer only) <span id="harmony-count" class="muted">— open a vocal stem</span></summary>
+        <ul id="harmony-list" class="hint"></ul>
+      </details>
       <div class="cluster">
         <button type="button" class="primary" id="btn-g-run-all">Run all</button>
         <button type="button" id="btn-g-continue" hidden>Continue after review</button>
-        <label class="hint"><input type="checkbox" id="chk-g-ai-draft" checked> Use the connected AI for stage 2 (when enabled)</label>
-        <label class="hint"><input type="checkbox" id="chk-g-ai-sheet" checked> Use the connected AI for stage 4 (when enabled)</label>
-        <label class="hint"><input type="checkbox" id="chk-exclude-unconfirmed-ai"> Leave out unconfirmed AI strokes in stages 3–4</label>
+        <label class="hint"><input type="checkbox" id="chk-g-ai-draft" checked> Use the connected AI for step 8 (when enabled)</label>
+        <label class="hint"><input type="checkbox" id="chk-g-ai-sheet" checked> Use the connected AI for step 10 (when enabled)</label>
+        <label class="hint"><input type="checkbox" id="chk-exclude-unconfirmed-ai"> Leave out unconfirmed AI strokes in steps 9–10</label>
       </div>
       <p class="hint" id="g-message"></p>
+      <div id="stage-result" hidden aria-live="polite"></div>
+      <p class="hint shortcuts"><strong>Shortcuts:</strong> Space play/pause · ←/→ 1 s (Shift: 5 s) · Ctrl+Z undo stroke · Delete remove selected stroke · L clear loop · drag the time ruler to set a loop</p>
+        </li>
+      </ol>
     </section>
 
     <div class="workspace">
       <div class="stage-wrap">
+        <div id="tap-dock" class="tap-dock" hidden role="region" aria-label="Tap controls">
+          <div class="tap-dock-head"><strong>Tapping</strong> <button type="button" id="tap-dock-stop" title="Stop tapping">Stop</button></div>
+          <p class="tap-dock-rule"><strong>One tap per line</strong>, at its first sound. Don't tap line ends.</p>
+          <p class="tap-dock-line next"><span>Next to tap:</span> <span id="tap-dock-next">—</span></p>
+          <p class="tap-dock-line"><span class="muted">Last tapped:</span> <span id="tap-dock-current">—</span></p>
+          <p class="tap-dock-warn" id="tap-dock-warn" hidden><span id="tap-dock-warn-text"></span> <button type="button" id="tap-dock-clear">Clear taps</button></p>
+          <div class="tap-dock-buttons">
+            <button type="button" id="tap-dock-play">Play / pause</button>
+            <button type="button" class="primary" id="tap-dock-mark">Tap this line (Enter)</button>
+            <button type="button" id="tap-dock-skip">Skip line</button>
+            <button type="button" id="tap-dock-undo">Undo</button>
+          </div>
+          <p class="tap-dock-line muted" id="tap-dock-count">0 tapped</p>
+          <label class="tap-dock-line muted">Correction (ms) <input type="number" id="tap-dock-latency" min="-1000" max="1000" step="10" value="-120"></label>
+        </div>
         <canvas id="stage" tabindex="0" aria-label="Tracing timeline. Hold the left mouse button while the song plays to draw a stroke."></canvas>
       </div>
       <aside class="side">
-        <h2>Original lyrics <span class="optional">(optional — paste if you have them)</span></h2>
-        <p class="hint">Paste the reference song's lyrics yourself; Song Shape never fetches lyrics. Plain lines, blank line between sections. [Bracket] tags and (performance cues) are ignored. Then click the plot in Place-word mode to drop the next word. A word is not a stroke — switch to Trace to draw.</p>
-        <label class="field">Original lyrics (paste)
-          <textarea id="lyrics-text" rows="6" placeholder="One sung line per line.&#10;Blank line between sections.&#10;&#10;Tags in [brackets] are ignored."></textarea>
-        </label>
-        <p class="hint" id="lyrics-input-note" aria-live="polite"></p>
-        <label class="hint"><input type="checkbox" id="chk-place-parentheses"> Place (parenthesis) words</label>
-        <p class="hint">Words in (parentheses) are backing vocals / ad-libs and are not placed unless you turn this on. Bracket cues such as [hold] or [pause: 1 bar] are never placed.</p>
+        <h2>Place words by hand <span class="optional">(optional)</span></h2>
+        <p class="hint">The original lyrics go in step 2 above. Click the plot in Place-word mode to drop the next word; a word is not a stroke — switch to Trace to draw.</p>
         <div id="next-word-preview" class="next-word">Next word: <strong id="next-word-text">—</strong></div>
         <p id="lyrics-progress" class="hint">0 of 0 words placed</p>
         <div class="cluster">
           <button type="button" id="btn-skip-word">Skip word</button>
           <button type="button" id="btn-place-line" title="Drop the rest of the current lyric line at the playhead or loop">Place line</button>
           <button type="button" id="btn-undo-word">Undo word</button>
-          <button type="button" id="btn-clear-words">Clear words</button>
+          <button type="button" id="btn-clear-words" title="Removes every placed word (not the taps)">Clear all placed words</button>
         </div>
         <h3>CPU word timing assist</h3>
         <p class="hint">Start with the audio and supplied original lyrics. These two optional actions generate unverified word-position proposals; they do not transcribe words. The first option is more useful after you select a short lyric-line loop on the timeline. Existing anchors are preserved.</p>
@@ -146,11 +232,42 @@
         </label>
 
         <h2>Map my lyrics</h2>
-        <p class="hint">Paste <strong>your replacement lyrics</strong> (saved separately in your local Song Shape JSON). Plain lines, blank line between sections; any [bracket] tags or (performance cues) you paste are ignored and replaced by Song Shape's own tags. Copy a reduced-data AI request, or build a contour-directed sheet without AI. Style prompts describe the sound and do not name the artist.</p>
-        <label class="field">Your replacement lyrics (paste)
+        <p class="hint">Paste <strong>your replacement lyrics</strong> (saved separately in your local Song Shape JSON). Plain lines, blank line between sections; any [bracket] tags or (performance cues) you paste are ignored and replaced by Song Shape's own tags (except a <strong>[New]</strong> mark, see Extend below). <strong>Leave out standalone dashes (-, –, —)</strong>; they break word timing (hyphenated words are fine). Copy a reduced-data AI request, or build a contour-directed sheet without AI. Style prompts describe the sound and do not name the artist.</p>
+        <h3 id="step1-title">Step 1 · Map my lyrics to the reference performance</h3>
+        <p class="hint">Your lyrics, sung the way the reference singer sings: paste them one line per sung line, a blank line between sections, matching the original line by line (ending included). You get a ready-to-paste sheet with section and delivery tags.</p>
+        <label class="field">Step 1 · My lyrics — Your replacement lyrics (paste)
           <textarea id="new-lyrics" rows="5" placeholder="The lyrics you want sung with the same delivery.&#10;One line per sung line; blank line between sections."></textarea>
         </label>
         <p class="hint" id="new-lyrics-input-note" aria-live="polite"></p>
+        <div class="cluster"><button type="button" class="primary" id="btn-step1-sheet">Step 1 · Map my lyrics (ready-to-paste sheet)</button> <button type="button" id="btn-step1-json">Download Step 1 vocal performance JSON</button></div>
+        <div id="extend-panel">
+          <h3 id="step2-title">Step 2 · Extend in that style</h3>
+          <p class="hint">Now add your own extra sections in the style you just mapped. Click <strong>Start from my Step 1 lyrics</strong>, then type each new section where you want it (anywhere, also between existing sections) with a line such as <strong>[New Verse]</strong>, <strong>[New Chorus]</strong>, <strong>[New Bridge]</strong> or just <strong>[New]</strong> above it. Each new section inherits the tags of the same section type already mapped (the nearest one before it). Your Step 1 sections keep their mapping, including the ending.</p>
+          <label class="field">Step 2 · My song with new sections (Step 1 lyrics plus sections marked [New …])
+            <textarea id="extend-lyrics" rows="8" placeholder="Click Start from my Step 1 lyrics, then add [New Verse] sections where you want them."></textarea>
+          </label>
+          <div class="cluster">
+            <button type="button" id="btn-extend-from-step1">Start from my Step 1 lyrics</button>
+            <button type="button" class="primary" id="btn-step2-sheet">Step 2 · Extend in that style (sheet)</button>
+            <button type="button" id="btn-step2-json">Download Step 2 vocal performance JSON</button>
+          </div>
+          <label><input type="checkbox" id="chk-extend-lift"> Lift the new sections (optional; off = faithful: new sections inherit the measured performance unchanged)</label>
+          <p class="hint">Lift on: new sections keep their source section's tags but step up one notch (higher register, longer holds, more power), most of all on the final line (long hold on the last word, lifted ending). The sheet and the JSON mark what changed.</p>
+          <p class="hint" id="extend-check" aria-live="polite"></p>
+          <p class="hint" id="suno-count-step2" aria-live="polite"></p>
+          <details>
+            <summary>How sections are matched, and naming your own</summary>
+            <p class="hint">The reference sections (verse, chorus, bridge, vocalise, outro) come from the reference lyric tags, or are detected from repeated lines, wordless lines and long instrumental breaks. Your sections are matched to them in order. Each gets a <strong>[Vocal style: …]</strong> tag (pace, register, intensity, held notes, contour) plus per-line delivery tags. If your first section starts with a tag such as <strong>[Verse]</strong>, you are naming sections yourself: give each section a tag ([Verse], [Chorus], [Bridge], [Outro], [New Verse]…); a blank line with no tag after it stays inside the same section (a phrasing gap), and your names are kept. A section left over with no original section to follow is treated as new.</p>
+          </details>
+          <label><input type="checkbox" id="chk-extend" checked> Map by sections (section style tags; new sections inherit)</label>
+          <label><input type="checkbox" id="chk-json-ref-text"> Include the reference lyric lines in the vocal performance JSON (off by default; keep that file private)</label>
+          <p class="hint">The vocal performance JSON (Step 1 or Step 2) holds, per section, line and word: the reference timing, relative pitch contour, register, holds, dynamics and phrasing, your lyric and the reference line it maps to; new sections are marked new with their source section. Hand it to a reasoning AI to help with tag mapping. No audio is inside. Schema: docs/vocal_json_schema.md.</p>
+          <label class="field">Section map and shape notes (not part of the paste)
+            <textarea id="extend-notes" rows="10" readonly placeholder="Step 1 and Step 2 write the section map here."></textarea>
+          </label>
+          <div class="cluster"><button type="button" id="btn-copy-extend">Copy section notes</button></div>
+          <p class="hint">Your lyric words are never changed. Pace is syllables per second of singing (no BPM is measured). Register and intensity come from the measured reference contour. Tags and style prompts describe the sound; no artist is named.</p>
+        </div>
         <div class="cluster">
           <button type="button" class="primary" id="btn-map-request">Copy mapping request</button>
           <button type="button" id="btn-map-request-save">Save request .txt</button>
@@ -162,9 +279,25 @@
           <button type="button" id="btn-handoff-html">Save full local report HTML</button>
           <button type="button" id="btn-handoff-json">Save AI handoff JSON</button>
         </div>
-        <label class="field">Mapping output (local draft; review flagged lines)
-          <textarea id="map-output" rows="8" readonly placeholder="The request or sheet will appear here."></textarea>
+        <label class="field"><strong>Lyrics for Suno</strong> (paste this into the lyrics box; it holds only lyrics and Song Shape tags)
+          <textarea id="map-output" rows="14" readonly placeholder="Step 10 writes the tagged lyrics here. Requests for an AI also appear here."></textarea>
         </label>
+        <div class="cluster suno-budget">
+          <label>Suno lyrics limit
+            <select id="suno-budget">
+              <option value="5000" selected>5,000 characters (current Suno lyrics box)</option>
+              <option value="3000">3,000 characters (older Suno models)</option>
+              <option value="0">No limit (full sheet)</option>
+            </select>
+          </label>
+          <span id="suno-count" class="hint" aria-live="polite">0 characters</span>
+        </div>
+        <p class="hint" id="suno-fit-note">Built in this order: your lyrics with their per-line performance tags and section headers first; then the characters left are used for the global vocal direction and section [Style] lines, as full as fits, never past the limit. Only if lyrics and line tags alone are over the limit are line tags shortened (holds, peaks, dips and register kept), with a warning. Lyric words are never cut.</p>
+        <div class="cluster"><button type="button" class="primary" id="btn-copy-lyrics">Copy lyrics for Suno</button> <button type="button" id="btn-copy-style">Copy style prompt</button></div>
+        <label class="field">Style prompt (Suno's style box)
+          <textarea id="map-style" rows="3" readonly></textarea>
+        </label>
+        <p class="hint" id="map-notes" aria-live="polite"></p>
 
         <div class="visual-handoff" id="visual-handoff" hidden>
           <p class="hint">Visual contour on your replacement words. Upload the exported PNG alongside the copied AI text to a vision-enabled model, or use the complete event JSON with a text-only local model. Source audio and original reference wording are not included in shared outputs.</p>
@@ -179,15 +312,16 @@
         </div>
         <p class="hint" id="suno-limits">Suno-style generators do not guarantee that bracketed cues will be followed. Tags are suggestions, not promised control. The lead identity is written once; harmony cues appear only where you marked backing harmony under that lead.</p>
 
-        <h2>Draft (measured pitch)</h2>
-        <p class="hint">An in-browser pitch and loudness measurement. This is a distinct editable draft layer, not the hand trace of perceived delivery. Measuring a whole song can take several seconds; a 15–20 second view or loop is usually near-instant.</p>
-        <label class="hint"><input type="checkbox" id="chk-draft-view"> Draft only the current view / selection</label>
-        <label class="field">Reference frequency in Hz (optional; fixed across subsequent selections)
-          <input type="number" id="draft-baseline-hz" min="40" max="20000" step="0.01" placeholder="Auto-estimate from first draft">
+        <details id="pitch-advanced">
+        <summary><strong>Advanced: pitch tracker</strong> (step 8 by hand)</summary>
+        <p class="hint">Step 8 runs this for you. Use it by hand to re-measure part of the song. It listens to the audio (the vocal stem if one is open) and draws the green measured line, which is separate from your own strokes. A whole song takes a few seconds; a 15–20 s loop is near-instant.</p>
+        <label class="hint"><input type="checkbox" id="chk-draft-view"> Only measure what is on screen (or inside the loop)</label>
+        <label class="field">Baseline note in Hz (automatic from the vocal range when a stem is open)
+          <input type="number" id="draft-baseline-hz" min="40" max="20000" step="0.01" placeholder="Auto: midpoint of lead range">
         </label>
-        <p class="hint">Keep this reference fixed when analyzing multiple sections to preserve relative high/low levels. This is a measured-frequency reference, not the singer's anatomical range. Mixed harmonies can confuse pitch detection.</p>
-        <button type="button" class="primary" id="btn-auto-contour">Analyze full local lead audio + add measured contour</button>
-        <p class="hint">No GPU or AI required. On isolated lead vocals it can propose a frequency contour automatically, but it is <strong>not</strong> a verified match for expressive delivery; harmonies and instruments can interfere.</p>
+        <p class="hint">The vocal stem sets the baseline to the midpoint of its confident lead range in semitones (2nd–98th percentiles, excluding harmony). Low through high register is relative to that range. Without a stem this field can still set a fixed baseline; otherwise the draft uses the median pitch.</p>
+        <button type="button" class="primary" id="btn-auto-contour">Measure the whole song and add the line</button>
+        <p class="hint">No GPU or AI needed. v0.2.11 cleans the line: octave jumps are folded, short spikes removed, short gaps bridged and stray dots dropped. It is still a measurement, <strong>not</strong> a verified match for how the singer delivers the line.</p>
         <div class="cluster">
           <button type="button" id="btn-build-draft">Build draft from audio</button>
           <button type="button" id="btn-cancel-draft" hidden>Cancel</button>
@@ -201,6 +335,7 @@
           </div>
           <p id="draft-message" class="draft-message" hidden></p>
         </div>
+        </details>
 
         <details id="ai-connect">
           <summary>Connect your AI (optional, off by default)</summary>
@@ -256,7 +391,7 @@
           <button type="button" id="btn-confirm-ai-stroke" title="Select an AI-drafted (dashed) stroke first">Confirm selected AI stroke</button>
           <button type="button" id="btn-confirm-all-ai">Confirm all AI strokes</button>
         </div>
-        <p class="hint" id="ai-confirm-info">AI-drafted strokes are flagged for review in stages 3–4 until you confirm them.</p>
+        <p class="hint" id="ai-confirm-info">AI-drafted strokes are flagged for review in steps 9–10 until you confirm them.</p>
         <ul id="stroke-list"></ul>
         <label class="field">Phrase label (optional)
           <input type="text" id="phrase-label" placeholder="e.g. peak, break, pickup, nosedive">
@@ -304,9 +439,10 @@
 
     <footer class="footer">
       <p>Local and offline: double-click index.html or run Start-SongShape.cmd — no server or Python needed. Files you open never leave this computer. Exports do not include the audio. Playback timing uses the audio clock, not wall time.</p>
-      <p>Release v0.2.9 — Song Shape. Licensed under Apache-2.0; keep the NOTICE and credit Ben Hayward and AI Playground LLC.</p>
+      <p>Release v0.2.11-dev — Song Shape. Licensed under Apache-2.0; keep the NOTICE and credit Ben Hayward and AI Playground LLC.</p>
       <details id="about">
         <summary>About Song Shape</summary>
+        <p id="about-lead-only">Song Shape is designed to track a single lead singer performance. Harmonies, backing vocals and choir parts are not tracked; harmony labels are hints found in the vocal stem, not facts. Unplaced words may be hiding in a harmony section.</p>
         <p id="about-disclaimer">The original Song Shape has no tracking, analytics, accounts or data collection. Use the official repository as the verified source; copies from elsewhere may have been modified.</p>
         <p>Copyright 2026 Ben Hayward and AI Playground LLC. Apache License 2.0 (see LICENSE and NOTICE).</p>
         <p>Official repository: <a id="link-repo" href="#" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">(set by js/project-info.js)</a> · <a id="link-report-bug" href="#" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Report a bug</a> <span id="repo-placeholder-note" class="muted" hidden>(placeholder address until the repository is published)</span></p>
@@ -317,6 +453,7 @@
   <script src="js/strokes.js"></script>
   <script src="js/lyrics.js"></script>
   <script src="js/pitch.js"></script>
+  <script src="js/contour-clean.js"></script>
   <script src="js/draft.js"></script>
   <script src="js/sheet.js"></script>
   <script src="js/map-lyrics.js"></script>
@@ -328,8 +465,16 @@
   <script src="js/lyric-input.js"></script>
   <script src="js/cpu-tags.js"></script>
   <script src="js/performance-map.js"></script>
+  <script src="js/word-onset.js"></script>
+  <script src="js/ai-tools.js"></script>
+  <script src="js/helper-client.js"></script>
   <script src="js/align-assist.js"></script>
   <script src="js/vocal-handoff.js"></script>
+  <script src="js/extend.js"></script>
+  <script src="js/suno-budget.js"></script>
+  <script src="js/performance-json.js"></script>
+  <script src="js/harmony-detect.js"></script>
+  <script src="js/vocal-range.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/render.js"></script>
   <script src="js/demo-data.js"></script>

@@ -1,13 +1,14 @@
-# Examples
+# Song Shape v0.2 examples
 
-Everything here is synthetic or fictional — no commercial recordings or published lyrics.
+These files are fixtures and walk-throughs. None of them include commercial audio.
 
 | File | What it is |
 |---|---|
-| `automatic_demo/reference.txt` | Fictional "original" lyrics for the demo tone (`demo/fictional_tone.wav`). |
-| `automatic_demo/replacement.txt` | Fictional replacement lyrics. |
-| `automatic_demo/output/` | What the CPU-only chain writes for the two files above: `node cli/songshape.js analyze demo/fictional_tone.wav examples/automatic_demo/reference.txt examples/automatic_demo/replacement.txt -o <new folder>`. |
-| `new_lyrics_sample.txt` | A short replacement-lyrics sample in the paste format (plain lines, blank line between sections). |
-| `sine_sweep.wav` | A synthetic sweep for `node cli/songshape.js draft examples/sine_sweep.wav`. |
+| `sine_sweep.wav` | Synthetic 2-second rising sine (220–660 Hz). Use with `node cli/songshape.js draft examples/sine_sweep.wav`. |
+| `honor_quickstart.json` | The word “honor” placed once, owning a rise, a hold, a gap, a pickup, and a descent. |
+| `honor_quickstart_sheet.txt` | The rule-based lyric sheet for that file. |
+| `honor_reference.json` | A short sample reference trace of “What Color Is My Honor?” (fictional timing) for the Map my lyrics workflow. The tenor identity is set on this sample only. |
+| `new_lyrics_sample.txt` | New lyrics to map onto that reference. |
+| `map_my_lyrics_honor_sample.txt` | Ready-to-paste AI request, rule-based sheet, and style-prompt template (does not name the artist). |
 
-See also `demo/` (the demo tone as WAV and MP3, and a small hand-trace project, `example_peak_break_pickup_nosedive.json`).
+Import a `.json` in the app (or drop it on the page), then **Copy lyric sheet** or **Copy mapping request**.

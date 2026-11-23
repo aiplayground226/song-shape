@@ -25,6 +25,7 @@
 const fs = require("fs");
 const path = require("path");
 const SS = require("../js/vocal-handoff.js");
+Object.assign(SS, require("../js/contour-clean.js")); // v0.2.11 adaptive gate + contour cleanup
 require("../js/ai-learn.js"); // composes AI learning onto the same SS object
 require("../js/ai-context.js"); // default SONG_SHAPE_AI_CONTEXT.md (embedded)
 require("../js/ai-chain.js");   // v0.2.8 chain helpers (context, chunked drafts, sheet check)
@@ -142,8 +143,8 @@ function cmdDraft(file, outFile) {
   const buf = fs.readFileSync(file);
   SS.validateWavAudio(file, buf);
   const wav = SS.readWavPcm(buf);
-  const frames = SS.analyzePitchLoudness(wav.samples, wav.sampleRate);
-  const draft = SS.buildDraft(frames);
+  const frames = SS.analyzePitchLoudness(wav.samples, wav.sampleRate, {silenceRms: SS.adaptiveSilenceRms(wav.samples, wav.sampleRate)});
+  const draft = SS.buildDraft(frames, { cleanup: true });
   const session = SS.createSession();
   session.audio = {
     name: path.basename(file),
@@ -367,8 +368,8 @@ async function runChain(audioPath, opts) {
       log.stages.place_words = { skipped: 'no reference lyrics' };
     }
     // Stage 2: shape. CPU always; AI improves it when configured.
-    const frames = SS.analyzePitchLoudness(analysis.samples, analysis.sampleRate, { winMs: 40, hopMs: 30, minHz: 80, maxHz: 1000 });
-    const draft = SS.buildDraft(frames);
+    const frames = SS.analyzePitchLoudness(analysis.samples, analysis.sampleRate, { winMs: 40, hopMs: 30, minHz: 80, maxHz: 1000, silenceRms: SS.adaptiveSilenceRms(analysis.samples, analysis.sampleRate) });
+    const draft = SS.buildDraft(frames, { cleanup: true });
     session.draft = draft;
     if (opts.ai) {
       const t2 = Date.now();
@@ -583,8 +584,8 @@ async function aiDraftOne(file, examples, ai) {
   const t0 = Date.now();
   const audio = decodeAudioFile(file, arg("--ffmpeg", null));
   const durationMs = Math.round((audio.samples.length / audio.sampleRate) * 1000);
-  const frames = SS.analyzePitchLoudness(audio.samples, audio.sampleRate, { winMs: 40, hopMs: 30, minHz: 80, maxHz: 1000 });
-  const draft = SS.buildDraft(frames);
+  const frames = SS.analyzePitchLoudness(audio.samples, audio.sampleRate, { winMs: 40, hopMs: 30, minHz: 80, maxHz: 1000, silenceRms: SS.adaptiveSilenceRms(audio.samples, audio.sampleRate) });
+  const draft = SS.buildDraft(frames, { cleanup: true });
   const features = SS.audioFeatures(draft, durationMs);
   const messages = SS.buildTraceDraftMessages(features, examples);
   const t1 = Date.now();

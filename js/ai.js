@@ -263,6 +263,26 @@
    * A plain string becomes a single user message. Returns null if invalid.
    */
   var CHAT_ROLES = ["system", "user", "assistant"];
+  // v0.2.11: tool-calling turns (OpenAI-compatible). Only used when the caller passes opts.tools.
+  function toToolChatMessages(input) {
+    if (!Array.isArray(input) || !input.length) return null;
+    var out = [];
+    for (var i = 0; i < input.length; i += 1) {
+      var m = input[i];
+      if (!m || typeof m !== "object") return null;
+      if (m.role === "tool") {
+        if (typeof m.tool_call_id !== "string" || typeof m.content !== "string") return null;
+        out.push({ role: "tool", tool_call_id: m.tool_call_id.slice(0, 200), content: m.content });
+      } else if (m.role === "assistant" && Array.isArray(m.tool_calls)) {
+        out.push({ role: "assistant", content: typeof m.content === "string" ? m.content : "", tool_calls: m.tool_calls.slice(0, 16).map(function (c) {
+          return { id: String(c.id || "").slice(0, 200), type: "function", "function": { name: String(c["function"] && c["function"].name || "").slice(0, 80), arguments: String(c["function"] && c["function"].arguments || "{}").slice(0, 20000) } };
+        }) });
+      } else if (CHAT_ROLES.indexOf(m.role) >= 0 && typeof m.content === "string") {
+        out.push({ role: m.role, content: m.content });
+      } else return null;
+    }
+    return out;
+  }
   function toChatMessages(input) {
     if (typeof input === "string") {
       return input.trim() ? [{ role: "user", content: input }] : null;
@@ -284,7 +304,7 @@
    */
   function sendChat(messages, done, opts) {
     opts = opts || {};
-    var chatMessages = toChatMessages(messages);
+    var chatMessages = opts.tools ? toToolChatMessages(messages) : toChatMessages(messages);
     if (!chatMessages) {
       done(new Error("Nothing valid to send: the request must be text or a list of chat messages."));
       return;
@@ -324,6 +344,7 @@
     // Optional: Ollama and llama.cpp accept {"type":"json_object"}; some servers
     // (e.g. LM Studio) reject it, so it is opt-in.
     if (opts.jsonMode) payload.response_format = { type: "json_object" };
+    if (Array.isArray(opts.tools) && opts.tools.length) { payload.tools = opts.tools; payload.tool_choice = "auto"; }
     var body = JSON.stringify(payload);
     var controller = null, timer = null;
     if (opts.timeoutMs > 0 && typeof AbortController === "function") {
@@ -332,12 +353,12 @@
     }
     var finished = false;
     var realDone = done;
-    done = function (err, text) {
+    done = function (err, text, extra) {
       if (finished) return;
       finished = true;
       if (timer) clearTimeout(timer);
       if (err && err.name === "AbortError") err = new Error("The AI request timed out after " + Math.round(opts.timeoutMs / 1000) + " s.");
-      realDone(err, text);
+      realDone(err, text, extra);
     };
     // redirect: "error" keeps the loopback/remote opt-in check meaningful:
     // a local endpoint cannot silently bounce the request elsewhere.
@@ -359,9 +380,14 @@
           done(new Error("The AI endpoint did not return JSON."));
           return;
         }
-        var content = parsed && parsed.choices && parsed.choices[0] && parsed.choices[0].message
-          ? parsed.choices[0].message.content
-          : null;
+        var message = parsed && parsed.choices && parsed.choices[0] && parsed.choices[0].message;
+        var content = message ? message.content : null;
+        if (opts.tools && message && Array.isArray(message.tool_calls) && message.tool_calls.length) {
+          var calls = message.tool_calls.slice(0, 16).filter(function (c) { return c && c["function"] && typeof c["function"].name === "string"; });
+          var note = typeof content === "string" ? sanitizeAiText(content) : { ok: true, text: "" };
+          done(null, note.ok ? note.text : "", { tool_calls: calls });
+          return;
+        }
         if (typeof content !== "string") {
           done(new Error("The AI response had no text content."));
           return;

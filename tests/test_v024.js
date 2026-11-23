@@ -5,7 +5,7 @@ let n=0;
 function test(name,fn){fn();n++;console.log('ok '+name);}
 function example(){
  const s=SS.createSession();
- SS.setLyrics(s,'[Verse]\nlantern rises\nreturns');
+ SS.setLyrics(s,'[Verse]\nhonor rises\nreturns');
  const a=SS.placeNextWord(s,{start_ms:0,end_ms:2200});
  s.strokes=[
   {id:'s1',word_id:a.word_id,start_ms:0,end_ms:800,points:[[0,0],[400,0.8],[800,0.8]],annotations:[]},
@@ -30,19 +30,19 @@ test('300ms gap is unknown, not breath or silence',()=>{
 test('replacement lyrics do not mutate reference',()=>{
  const s=example(),original=JSON.stringify(SS.sessionToJSON(s));const m=SS.buildPerformanceMap(SS.sessionToJSON(s));
  const t=SS.buildTransfer(m,'[Verse]\ncourage climbs\nreturns');
- assert.equal(t.rows[0].text,'courage climbs');assert.equal(m.groups[0].text,'lantern rises');
+ assert.equal(t.rows[0].text,'courage climbs');assert.equal(m.groups[0].text,'honor rises');
  assert.equal(JSON.stringify(SS.sessionToJSON(s)),original);
 });
 test('global singer locked once and source words not exported as replacement',()=>{
  const s=example(),m=SS.buildPerformanceMap(SS.sessionToJSON(s));
  const lyrics=SS.exportDirections(m,SS.buildTransfer(m,'[Verse]\ncourage climbs\nreturns')).lyrics;
  assert.equal((lyrics.match(/Global Vocal Direction/g)||[]).length,1);
- assert(lyrics.includes('courage climbs'));assert(!lyrics.includes('lantern rises'));
+ assert(lyrics.includes('courage climbs'));assert(!lyrics.includes('honor rises'));
 });
 test('private AI payload includes no source word strings',()=>{
  const m=SS.buildPerformanceMap(SS.sessionToJSON(example()));const p=SS.aiPayload(m,SS.buildTransfer(m,'new expression'),false);
  assert.equal(p.includes_source_lyric_text,false);assert.equal(p.includes_audio,false);assert.equal(p.network_sent,false);
- assert(!JSON.stringify(p).includes('lantern rises'));
+ assert(!JSON.stringify(p).includes('honor rises'));
 });
 test('group-word count mismatch explicitly flagged',()=>{
  const m=SS.buildPerformanceMap(SS.sessionToJSON(example()));
@@ -117,7 +117,7 @@ test('separate new lyrics survive session save and import',()=>{
  const s=example();s.replacement_lyrics='[Chorus]\nNew line one\nNew line two';
  const loaded=SS.parseSession(SS.sessionToJSON(s));
  assert.equal(loaded.replacement_lyrics,s.replacement_lyrics);
- assert.equal(loaded.lyrics.lines.filter(l=>l.kind==='lyric')[0].text,'lantern rises');
+ assert.equal(loaded.lyrics.lines.filter(l=>l.kind==='lyric')[0].text,'honor rises');
 });
 test('legacy sessions lacking replacement lyrics stay valid',()=>{
  const obj=SS.sessionToJSON(example());delete obj.replacement_lyrics;

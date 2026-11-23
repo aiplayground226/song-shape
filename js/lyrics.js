@@ -68,7 +68,15 @@
     } else {
       work = work.replace(PAREN_GROUP_RE, " ");
     }
-    return work.trim().split(/\s+/).filter(Boolean);
+    // v0.2.11 fix4: an ellipsis is a pause, not a word. "for...honor" splits after the ellipsis; a standalone
+    // "..." or "\u2026" joins the word before it (so it still marks a pause there) and is never a word itself.
+    work = work.replace(/(\.{2,}|\u2026)(?=[^\s.\u2026])/g, "$1 ");
+    var out = [];
+    work.trim().split(/\s+/).filter(Boolean).forEach(function (t) {
+      if (/^(\.{2,}|\u2026)+$/.test(t)) { if (out.length && !/(\.{2,}|\u2026)$/.test(out[out.length - 1])) out[out.length - 1] += t; return; }
+      out.push(t);
+    });
+    return out;
   }
 
   function emptyLyrics() {
@@ -196,6 +204,7 @@
     session.place_parentheses = options.placeParentheses;
     session.lyrics = parseLyrics(text, options);
     session.anchors = [];
+    session.line_taps = []; // line ids change with the text
     session.active_word_id = null;
     return session.lyrics;
   }
@@ -580,6 +589,59 @@
     return { total: total, placed: placed, skipped: skipped, remaining: total - placed - skipped };
   }
 
+
+  /*
+   * v0.2.11 fix5: tap-to-mark line anchors. While the song plays the user taps at the start of each lyric
+   * line, in order. A tap belongs to the next line after the last tapped or skipped line. Taps are stored in
+   * session.line_taps as {line_id, t_ms, raw_ms} (t_ms = raw tap time + latency correction, audio time) or
+   * {line_id, skipped: true}. The aligner treats tapped line starts as hard anchors; other lines align as usual.
+   */
+  var TAP_LATENCY_DEFAULT_MS = -120;
+  function tapLines(session) {
+    var words = (session.lyrics && session.lyrics.words) || [];
+    var placeable = {};
+    words.forEach(function (w) { if (!w.skipped) placeable[w.line_id] = true; });
+    return ((session.lyrics && session.lyrics.lines) || []).filter(function (l) { return l.kind === "lyric" && placeable[l.id]; });
+  }
+  function lineTaps(session) {
+    if (!Array.isArray(session.line_taps)) session.line_taps = [];
+    return session.line_taps;
+  }
+  function nextTapLine(session) {
+    var lines = tapLines(session), taps = lineTaps(session);
+    if (!taps.length) return lines[0] || null;
+    var last = taps[taps.length - 1].line_id, i;
+    for (i = 0; i < lines.length; i += 1) if (lines[i].id === last) return lines[i + 1] || null;
+    return null;
+  }
+  function addLineTap(session, rawMs, latencyMs) {
+    var line = nextTapLine(session);
+    if (!line || !isFiniteNumber(rawMs)) return null;
+    var lat = isFiniteNumber(latencyMs) ? Math.max(-1000, Math.min(1000, latencyMs)) : TAP_LATENCY_DEFAULT_MS;
+    var t = Math.max(0, Math.round(rawMs + lat));
+    var taps = lineTaps(session), i;
+    for (i = taps.length - 1; i >= 0; i -= 1) if (!taps[i].skipped) { if (t <= taps[i].t_ms) t = taps[i].t_ms + 1; break; }
+    var tap = { line_id: line.id, t_ms: t, raw_ms: Math.round(rawMs) };
+    taps.push(tap);
+    return tap;
+  }
+  function skipLineTap(session) {
+    var line = nextTapLine(session);
+    if (!line) return null;
+    var tap = { line_id: line.id, skipped: true };
+    lineTaps(session).push(tap);
+    return tap;
+  }
+  function undoLineTap(session) { return lineTaps(session).pop() || null; }
+  function clearLineTaps(session) { var n = lineTaps(session).length; session.line_taps = []; return n; }
+  /** First word id of each tapped line -> tapped start (ms). */
+  function lineTapStarts(session) {
+    var out = {}, first = {};
+    ((session.lyrics && session.lyrics.words) || []).forEach(function (w) { if (!w.skipped && !first[w.line_id]) first[w.line_id] = w.id; });
+    lineTaps(session).forEach(function (t) { if (!t.skipped && first[t.line_id] && isFiniteNumber(t.t_ms)) out[first[t.line_id]] = t.t_ms; });
+    return out;
+  }
+
   var api = {
     MAX_LYRICS_CHARS: MAX_LYRICS_CHARS,
     MAX_WORDS: MAX_WORDS,
@@ -614,7 +676,9 @@
     lineById: lineById,
     placedWordIds: placedWordIds,
     anchorHitTest: anchorHitTest,
-    lyricsProgress: lyricsProgress
+    lyricsProgress: lyricsProgress,
+    TAP_LATENCY_DEFAULT_MS: TAP_LATENCY_DEFAULT_MS, tapLines: tapLines, lineTaps: lineTaps, nextTapLine: nextTapLine, addLineTap: addLineTap,
+    skipLineTap: skipLineTap, undoLineTap: undoLineTap, clearLineTaps: clearLineTaps, lineTapStarts: lineTapStarts
   };
 
   root.SongShape = root.SongShape || {};

@@ -107,23 +107,23 @@
 
   function cuesFromPhrase(phrase) {
     var cues = [];
-    var lineTags = [];
+    var honor = [];
     var h = phrase.heights || {};
     var dir = phrase.direction;
     if (h.start <= -0.2 && (dir === "up" || dir === "up, then down")) cues.push("start softly");
     if (dir === "up" || dir === "up, then down") {
       cues.push("rise");
-      lineTags.push("[Rising pitch]");
+      honor.push("[Rising pitch]");
     }
     if (dir === "held") cues.push("hold");
     if (dir === "down") {
       cues.push("plunge");
-      lineTags.push("[Pitch drop]");
+      honor.push("[Pitch drop]");
     }
     if (dir === "down, then up") cues.push("step down");
-    if (dir === "up, then down") lineTags.push("[Pitch drop]");
+    if (dir === "up, then down") honor.push("[Pitch drop]");
     if (phrase.gapAfterMs >= 250) cues.push("break here");
-    return { cues: cues, lineTags: lineTags };
+    return { cues: cues, honor: honor };
   }
 
   /**
@@ -148,7 +148,7 @@
     if (!newLines.length) return [];
     if (!phrases.length) {
       return newLines.map(function (line) {
-        return { line: line, phrase: null, cues: [], lineTags: [] };
+        return { line: line, phrase: null, cues: [], honor: [] };
       });
     }
     var totalNew = 0;
@@ -169,7 +169,7 @@
       }
       var phrase = phrases[pIndex];
       var cues = cuesFromPhrase(phrase);
-      assignments.push({ line: line, phrase: phrase, cues: cues.cues, lineTags: cues.lineTags });
+      assignments.push({ line: line, phrase: phrase, cues: cues.cues, honor: cues.honor });
       consumedNew += Math.max(1, line.wordCount);
     }
     return assignments;
@@ -201,17 +201,17 @@
     }
     out.push("");
     var lastSectionKey = null;
-    var lastLineTag = {};
+    var lastHonor = {};
     aligned.forEach(function (row) {
       var sectionLabel = row.line.tag || (row.phrase && row.phrase.section ? "[" + row.phrase.section + "]" : null);
       if (row.line.isFirstInSection && sectionLabel && sectionLabel !== lastSectionKey) {
         out.push(sectionLabel);
         lastSectionKey = sectionLabel;
       }
-      row.lineTags.forEach(function (tag) {
-        if (!lastLineTag[tag + sectionLabel]) {
+      row.honor.forEach(function (tag) {
+        if (!lastHonor[tag + sectionLabel]) {
           out.push(tag);
-          lastLineTag[tag + sectionLabel] = true;
+          lastHonor[tag + sectionLabel] = true;
         }
       });
       row.cues.forEach(function (cue) {

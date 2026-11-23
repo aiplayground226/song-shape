@@ -7,6 +7,7 @@
   "use strict";
 
   var SS = root.SongShape || {};
+  if (typeof module !== "undefined" && module.exports) Object.assign(SS, require("./contour-clean.js"));
 
   function isFiniteNumber(v) {
     return typeof v === "number" && Number.isFinite(v);
@@ -52,6 +53,8 @@
    */
   function buildDraft(frames, opts) {
     opts = opts || {};
+    var cleanup = SS.cleanPitchFrames && opts.cleanup === true ? SS.cleanPitchFrames(frames, opts.cleanupOptions) : null;
+    if (cleanup) frames = cleanup.frames;
     var minGapMs = opts.minGapMs == null ? 120 : opts.minGapMs;
     var pointStep = opts.pointStep == null ? 20 : opts.pointStep;
     var voicedHz = [];
@@ -59,7 +62,11 @@
     for (i = 0; i < (frames || []).length; i += 1) {
       if (frames[i].voiced && frames[i].f0 > 0) voicedHz.push(frames[i].f0);
     }
-    var baselineHz = opts.baselineHz == null || opts.baselineHz === 0 ? (median(voicedHz) || 220) : opts.baselineHz;
+    // v0.2.11 fix6f: with a measured vocal range the baseline is the range midpoint (log pitch).
+    var fixed = !(opts.baselineHz == null || opts.baselineHz === 0);
+    var range = opts.range && isFiniteNumber(opts.range.baseline_hz) && opts.range.baseline_hz > 0 ? opts.range : null;
+    var baselineHz = fixed ? opts.baselineHz : range ? range.baseline_hz : (median(voicedHz) || 220);
+    var baselineFrom = fixed ? "fixed" : range ? "vocal_range_midpoint" : "median_f0";
     if (!isFiniteNumber(baselineHz) || baselineHz <= 0 || baselineHz > 20000) {
       throw new Error("Fixed measured-pitch baseline must be between 0 and 20000 Hz.");
     }
@@ -127,14 +134,16 @@
       y_semantics: "measured_pitch_relative_to_estimated_baseline",
       y_units: "normalized_octaves_around_median_f0",
       baseline_hz: baselineHz,
+      baseline_from: baselineFrom,
       strokes: strokes,
       gaps: gaps,
-      accepted: false
+      accepted: false,
+      cleanup: cleanup ? cleanup.stats : null
     };
   }
 
   var NO_AUDIO_DRAFT_MESSAGE =
-    "Load a local .wav first, then build a draft from the decoded audio.";
+    "Open audio (.wav or .mp3) first, then build a draft from the decoded audio.";
 
   /**
    * Decide whether "Draft only the current view / selection" should
@@ -258,7 +267,24 @@
     return session;
   }
 
+  /** v0.2.11: drop earlier unlinked CPU-measured strokes before a re-measure. Hand, AI and word-linked strokes stay. */
+  function removeUnlinkedMachineDraft(session) {
+    if (!session || !Array.isArray(session.strokes)) return 0;
+    var linked = {};
+    (session.anchors || []).forEach(function (a) {
+      if (a.stroke_id) linked[a.stroke_id] = true;
+      (a.stroke_ids || []).forEach(function (id) { linked[id] = true; });
+    });
+    var before = session.strokes.length;
+    session.strokes = session.strokes.filter(function (s) {
+      var machine = Array.isArray(s.annotations) && s.annotations.indexOf("machine_measured_pitch_draft") >= 0;
+      return !machine || s.word_id || linked[s.id];
+    });
+    return before - session.strokes.length;
+  }
+
   var api = {
+    removeUnlinkedMachineDraft: removeUnlinkedMachineDraft,
     buildDraft: buildDraft,
     emptyDraft: emptyDraft,
     acceptDraft: acceptDraft,

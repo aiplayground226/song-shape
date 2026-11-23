@@ -4,21 +4,102 @@ All notable changes to Song Shape. Versions follow `MAJOR.MINOR.PATCH`; the app 
 
 **Credits for bug reports.** Fixes are made by the maintainers on `main` (we don't merge pull requests from forks). When a fix comes from your issue, it is listed here with your GitHub handle, e.g. "Fixed: … (reported by @handle in #12)". Tell us in the issue if you'd rather not be credited.
 
-## Unreleased
+## v0.2.11-dev — AI-first: rip the vocals, map them, words on the vowel
+
+- **Stage 0, vocal stem first.**
+  - **Open vocal stem** measures an isolated vocal while playback stays on the song.
+  - An optional loopback helper (`tools/helper/`, Python stdlib) rips the stem with your own Demucs (`separate_demucs.py`) and aligns the known lyrics with wav2vec2-base (MIT, `align_ctc.py`).
+  - Helper safety: token, Origin allowlist, argv only, no shell.
+- **Tool-using local AI** (`js/ai-tools.js`).
+  - **Run with local AI** lets an OpenAI-compatible model with tool calling (LM Studio, Ollama, llama.cpp) call `load_song → separate_vocals → map_vocals → place_words → review`. The AI reviews; the tools measure.
+  - **Run the tools** runs the same steps in a fixed order without AI.
+  - `sendAiChat` / `sendAiChatAsync` now carry `tools` / `tool_calls`.
+- **Words on the vowel** (`js/word-onset.js`).
+  - The aligner finds the signal (first sound), kept as `anchors[].signal_ms`. The start then moves to the vowel: phone spans, else the energy vowel, else the letter rule (1st vowel, 2nd of a double). `anchors[].anchor_rule` records which rule was used.
+  - Against hand-marked word times on a reference song, wav2vec2-base on the stem plus the energy vowel was far closer than v0.2.10's whole-song estimate.
+- **Fix7: guided flow 1–10 and review fixes.**
+  - The guided panel is numbered as you work: 1 Open the song, 2 Paste the original lyrics (the box moved up from the side panel), 3 Song or your own vocal stem (no GPU needed for your own stem), 4 Local helper token and Check helper (optional, your own PC only; website users skip 4–5), 5 Rip the vocals and place the words (the five green lines), 6 Tap line starts (optional), 7–10 the stages: Place the original words, Draft the shape, Fit your lyrics, Export.
+  - Step 7 says: "If you did the tapping step, click this once more so it re-places the words using your taps as anchors." It now does: aligner lines within 400 ms of a tap keep their timing, others move to the tap, unplaced or CPU-estimated words are laid out from the tap; hand-checked words never move. The badge counts "anchored to your taps".
+  - Bug: Clear taps now removes only the taps. An unchanged or whitespace-only lyrics edit no longer clears placed words; a real change asks first. While tapping, Enter and Space in the lyrics box tap instead of typing.
+  - Bug: steps 7 and 8 wait for a running rip, pitch measurement or singer range, and say so when the song is still decoding.
+  - Step cards show the time of the last run and flash when they finish; step 8 shows its progress and what it measured.
+  - Export: `needs_review` only for real problems (word count beyond the tolerance, low-confidence words, untimed words). Machine-estimated word times are one `estimate_caveat`. Lines the user split from one sung line are counted together.
+  - Section `[Vocal style]` pace agrees with its line tags. 1–2 word lines share the line before (split lines) or keep only the essentials. "Restrained" needs the line peak 0.04 octave below the baseline, so lines that touch it do not flip.
+- **Fix6f: singer range sets the baseline.** New `js/vocal-range.js` (CPU). Once the vocal stem is measured, the lead singer's lowest and highest notes are the 2nd/98th percentiles of confident voiced frames. Quiet frames, isolated blips, harmony regions and glitch clusters past an empty pitch gap are excluded. The Singer baseline is the semitone midpoint of that range, and register labels are fifths of it. Shown above the stages (e.g. "Range G3–D5, baseline A4") and on the baseline label; saved as `vocal_range` in the project and the vocal JSON. Step 2 waits for the range before drafting. The manual baseline box is read-only while a stem is open and no longer gets filled from a loaded project's old median. Tests: 3 new; suite 188.
+- **Fix6e: lead singer only; harmony hints.** There is a disclaimer near stage 1, in About, in the README and in the JSON docs: Song Shape tracks a single lead singer; harmonies, backing vocals and choir parts are not tracked. New `js/harmony-detect.js` (CPU) finds likely stacked voices in the vocal stem (two pitches at once by iterative harmonic-sum estimation, a strong voice with an unclear pitch by YIN aperiodicity) and placed lines on top of each other. The plot shows a purple *harmony?* band and an **H** badge on the words, and the stage-1 **Harmony check** list shows the words and possibly unplaced words. Stage 1 now says unplaced words "may be in a harmony section near m:ss; check by ear". The session saves `detected_harmony`. The vocal JSON carries `harmony_regions` and harmony per word, line and section. The Suno sheet gets a `[Backing harmony]` note only when there is room (lowest priority).
+- **Fix6e: docked tap controls.** While tapping, a compact panel docks beside the graph (left or right margin, or floating at narrow widths). It shows the current and next line, Play / pause, Tap this line (Enter), Skip line, Undo, the count and the correction, and stays visible while scrolling. The next line is also shown above the word lane. Tap instructions now say **One tap per line** (tap once at the first sound of each line; don't tap line ends, since the next line's tap marks where this one ends) in the tap panel and the dock, with **Next to tap:** shown prominently. There is a gentle warning with **Clear taps** when two taps land less than 0.8 s apart, when there are more taps than lines, or when all lines are used up with most of the song still to come. Tests: 6 new; suite 185.
+- **Fix6d: Suno character budget.** New `js/suno-budget.js`. A **Suno lyrics limit** menu (5,000 by default, 3,000 or No limit) and a live used/left counter cover the Step 1 and Step 2 sheets and AI sheets. Build order: lyrics + per-line performance tags + section headers first, then the characters left are used for the global vocal direction and section `[Style]` lines (richest version that fits). A sheet that fits is unchanged. Line tags are shortened only when lyrics + line tags alone are over the limit, with a warning: filler words first, then shorter wording (holds, peaks, dips and register kept), shared tags for runs of one-word lines, no line tags on repeated choruses, and finally tags off from the end. Lyric words are never cut; lyrics alone over the limit give a warning. Copy takes the fitted sheet. Ben's Honor sheet: Step 1 5,063 → 4,892; Step 2 6,983 → 4,992. Tests: 7 new (one runs only with private fixtures, `SONGSHAPE_PRIVATE_FIXTURES`).
+- **Fix6d: Lift (optional) for Step 2.** **Lift the new sections** is off by default, so new sections inherit the measured performance faithfully. When on, new sections step up one notch (register, long holds, intensity), and the final line gets power, a long hold on the last word and a lifted ending. Mapped sections are unchanged. It is marked in the `[Vocal style]` line and in the JSON (`lift`, before/after tags).
+- **Fix6d: vocal performance JSON.** **Download Step 1/Step 2 vocal performance JSON** (`js/performance-json.js`, schema `songshape-vocal-performance-0.1`, `docs/vocal_json_schema.md`) gives, per section, line and word: timing, relative contour, register, holds, dynamics, phrasing, your lyric, the reference line it maps to, new sections with their source section, the Lift changes and the fitted Suno sheet. There is no audio, and no reference text unless opted in. Before this, only **Save AI handoff JSON** existed (Step 1 lyrics only, line tags and word positions, no contour points, no reference timing per line, no Step 2). Tests: 3 new; suite 179.
+- **Fix6b: two-pass Extend, as two clear steps.** The page now reads **Step 1 · Map my lyrics to the reference performance** (ready-to-paste sheet) and **Step 2 · Extend in that style**: a second box (saved as `extend_lyrics`) that starts from the Step 1 lyrics, where `[New …]` sections are added anywhere; it reports which tags each new section took and warns if mapped lines were changed. Map the whole song first (ending included), then add `[New …]` sections anywhere; the mapped sections keep the same reference sections and tags. When the first section has a tag, a block without a tag continues the section above (blank-line phrasing gaps stay inside one section, one section tag), and section names you give are kept.
+- **Fix6: Extend (follow the reference song section by section) and one tools home.**
+  - **Extend** (`js/extend.js`): reference sections (verse, chorus, bridge, vocalise, outro) are detected from repeated lines, wordless lines and 8 s or longer breaks, or taken from the reference lyric tags. Your sections are matched to them in order (type and line count), and lines map only inside their matched section. Each section gets a `[Vocal style: ...]` tag measured from the reference: pace in syllables per second, register, intensity, held notes and contour.
+  - Sections marked `[New Verse]` / `[New Chorus]` / `[New Outro]` / `[New]`, or left over with no reference section, inherit the style and per-line delivery shape of the same section type already mapped. A left-over verse at the end follows the outro.
+  - The Extend panel shows the section map and shape notes; the AI sheet keeps the section style lines. Lyrics are never changed, and no artist or BPM is claimed. **Map by sections** can be turned off.
+  - **One launcher:** `Start-SongShape.cmd` now runs `tools/launch/Start-SongShape.ps1`, which reads the shared `SongShape_Tools\songshape-tools.json` (python venv, ffmpeg, models, work folder), checks each tool (`found` / `NOT FOUND` with the path), writes this version's helper config and starts the helper. `-CheckOnly` only lists the tools.
+  - The helper's `/health` lists each tool with its path and found flag (shown under **Check helper**), and a job with a missing program, script or ffmpeg stops with a clear "not found" message.
+- **Fix5: tap line starts to help the aligner.**
+  - New **Tap line starts** panel in Stage 0: while the song plays, press Enter or Space at each lyric line's first sound (in order). Backspace / Ctrl+Z undoes, **Skip line** leaves a line automatic, **Clear taps** redoes. Partial tapping works.
+  - **Tap correction** (default −120 ms, ±1000 ms) offsets reaction delay; raw and corrected times are both saved (`session.line_taps`). Taps draw as purple dashed lines on the timeline.
+  - Tapped starts are hard anchors: the page sends `line_start`, and `align_ctc.py` cuts the audio 0.35 s before each tap and aligns each piece separately (meta `line_taps_used`). Without taps the aligner output is unchanged.
+  - Tapped lines are not onset-snapped; a tapped line's first word more than 400 ms from its tap moves to it (`anchor_rule` `line_tap_…`). A rerun replaces only unconfirmed machine words; hand-placed or confirmed words stay.
+  - The vowel target no longer moves a word onto the next word's first sound.
+  - The place-words line says "tap line starts to help (Stage 0)" when weak lines or spread words are found.
+- **Fix4: lyric styles, held words, unplaced words, accurate stage 1 label.**
+  - Ellipses are pauses, not words: "for…honor" splits after the ellipsis and a standalone "..." or "…" joins the word before it (no more letterless-word error). The aligner allows a pause or held note after any word ending in an ellipsis.
+  - Hyphenated or stretched words ("ho-nor", "ho-nooor") are one held word: aligned as the plain word, placed on the vowel, and their end stretches to where the held note stops (`anchor_rule` `held_…`).
+  - Lines of one or two words ("What color / is my / honor?") stay phrasing: each word is placed in order with room for pauses between them.
+  - A short word at the edge of a gap (e.g. "I" right before "wear") is no longer flagged as not heard.
+  - Words the aligner leaves unplaced stay unplaced: stage 1 no longer fills them with the whole-song CPU estimate (which parked them at 0:00), and **Estimate remaining words** now estimates each gap only between its placed neighbours.
+  - The stage 1 label counts by source (checked, by the aligner, estimated) and names unplaced words.
+  - Place words lists plain words spread over more than 4 s ("word spread over a long gap"). The studio-master hint now needs 3 or more not-heard words or weak matches on at least 20% of lines.
+- **Fix3: line starts on the vocal onset; vocalise and live-recording guidance** (page only; the helper is unchanged).
+  - Quiet stretches are gaps: when a line's first word lands in the fading tail of the previous note and a clear vocal onset (≥150 ms quiet, then a rise) sits nearby, the word moves to that onset (`anchor_rule` `line_onset_…`). Later words keep their order.
+  - Vocalise words (Oh, ooo, woh, whoa) are marked `vocalise_loose_…` and named in the place-words line to check by ear.
+  - The guided panel, Stage 0 and the README say to use the studio master recording, not a live performance, with lyrics that match what is sung. When the silence or weak-match flags fire 3 or more times, the place-words line repeats that hint.
+- **Fix2: alignment drift in the last minute.**
+  - The aligner (`align_ctc.py`) adds a "sung but not in the lyrics" token at the start, between lines (the page now sends `line_id`) and at the end. It absorbs backing vocals, ad-libs and held notes, so one line's errors no longer pull its neighbours.
+  - Words whose aligned audio is all silence come back with `in_silence: true`. The page leaves them unplaced and names them, because they were not sung there (for example a lyric line the recording never reaches).
+  - Place words lists lines with a weak aligner match, to check by ear.
+- **Contour cleanup** (`js/contour-clean.js`): adaptive silence gate for quiet stems, octave folding, spike removal, ≤160 ms gap bridging, dot removal. Step 2 always re-measures, and replaces only the unlinked CPU layer.
+- **Sheet.**
+  - "Lyrics for Suno" holds only the lyrics, with copy buttons; the style prompt and notes sit below it.
+  - Provenance and word-count notes no longer flag every line.
+  - Peak and held-note words are content words.
+  - Untagged repeats reuse their twin's tags.
+  - Chorus detection ignores punctuation, sung hyphens and line splits.
+  - An AI sheet that fails the check never replaces the CPU sheet.
+- **UI.**
+  - Save project at the top, Clear loop, a shortcuts line, and visible step 3/4 results.
+  - Undo word restores a Skip.
+  - Overlapping word labels step into rows.
+  - "Open audio" wording everywhere; the pitch tracker panel moved under Advanced.
+  - Importing a project with placed words marks stage 1 done.
+- **Fix (found on Ben's PC):** with the helper running but **Check helper** not clicked, *Run the tools* silently used the rough whole-song CPU word estimate (median error about 7 s). Now the tools check the helper themselves when the address and token are filled in, and *place words* stops with a plain message instead of guessing. The pipeline log shows the song and stem names and lengths.
+- **Tests.** New `tests/test_v0211.js` (19) and `tests/test_v0211_helper.js` (1); suite total **150**. The headless check passes. `test_v0210` now accepts any later 0.2.x version.
+- **Not done.** Whole-song CPU word estimate (two attempts measured worse and were reverted), controls in the gray left space, per-line independence, line start/end markers, next-line estimate accuracy, auto-scroll while dragging a loop.
+
+## v0.2.9 public release on GitHub (2026-11-21)
 
 - First public release on GitHub. Repository links in the app now point to https://github.com/aiplayground226/song-shape. Added `CONTRIBUTING.md`, issue templates and a pull-request notice. Credit line in the app, README and NOTICE: "Ben / AI Playground LLC - Mr. Bard / ChatGpt - GrokBot". Example and test lyrics are fictional.
 
-## [0.2.9] — 2026-11 — lyric input rules, CPU delivery vocabulary
+## v0.2.10 — standalone-dash rule, repeat tolerance from real songs
+
+- **Standalone dashes are refused with a plain message.** A dash standing alone between words (`-`, `–`, `—`, or a run such as `--`) is not a word and broke word timing (found in the map-archive test: the timing import failed with "Alignment word N is missing text"). Song Shape doesn't guess or remove it for you. Both lyric boxes and the CLI stop and say which line to fix: "Remove the standalone dash on line N … Leave out standalone dashes (-, –, —): they break word timing. Hyphenated words such as well-known are fine." The message shows under the box and in the status bar as you type. Projects saved before v0.2.10 that already hold a dash "word" get the same plain advice from **Import offline word timings**. Hyphenated words, dashes attached to a word (`ran—and`) and dashes inside `[bracket]` tags are unchanged. The instruction is also in the in-app "How to paste lyrics" help, next to both lyric boxes, and in the README.
+- **Repeat tolerance 0.7 (was 0.15).** Measured on 8 real songs (7 Ben songs + the Honor clip; RoFormer vocal rip + forced alignment), 0.15 matched 0 of 66 repeated-line pairs. 0.7 is the largest value that still matched no differently-sung pair (syllable pitch correlation below 0.5). The nearest differently-sung pair was at 0.80, and many sat at 1.0 (one extra phrase break). On the same data, repeated lines with identical tags went from 1/66 to 6/66, and same-sung pairs (r ≥ 0.9) from 1/12 to 5/12. `SS.CPU_TAG_REPEAT_TOLERANCE`.
+- Tests: new `tests/test_v0210.js` (7 tests). Suite total **130**. Headless check passes. Version label 0.2.10; schemas and AI context unchanged.
+
+## v0.2.9 — lyric input rules, CPU delivery vocabulary
 
 - **Lyrics are pasted, never fetched.** Two clearly labeled boxes: **Original lyrics (paste)** — optional, if you have them — and **Your replacement lyrics (paste)**. New in-app help "How to paste lyrics" in the guided panel; the CLI usage says the same. Song Shape never downloads lyrics or songs.
 - **Incoming tags are ignored** (`js/lyric-input.js`, `SS.cleanLyricInput`). In both lyric inputs, every `[bracket]` tag (whole-line or inline, even unclosed) and every clear `(performance cue)` such as `(whispered)`, `(spoken)`, `(x2)` is removed; unclear parentheses (`(softly, my love)`) are kept as sung backing words and flagged; plain parentheses (`(oh oh)`) stay as backing vocals as before. A UTF-8 BOM and Windows line endings are handled. Sections come from blank lines (a bracket line also marks a section start); Song Shape names them itself — a block that repeats is `[Chorus]`, others `[Verse]`. The output sheet contains only Song Shape's own tags (`[Global Vocal Direction: …]`, `[Verse]`/`[Chorus]`, `[Delivery: …]`, the backing-harmony tag). The cleaning report is shown under each box and written to `QUALITY_CHECK.json` (`chain.lyric_input`).
 - **CPU delivery vocabulary** (`js/cpu-tags.js`). Each line's tag is derived deterministically from its contour features (direction, register, dynamics, sustain, peak word, dips/climbs, ending, phrase breaks/labeled breaths, rhythm), at most 8 cues. **No variety logic:** identical or near-identical contours give identical tags; a repeated line with the same text and a contour within tolerance (0.15) reuses the first occurrence's tags (`same_tags_as_line` in the handoff); tags change only where the contour changes. Unlabeled gaps are "phrase break mid-line", never "breath". Calibrated on three real songs: pitch-tracker fragments less than 0.3 s apart count as one sung unit, a phrase break is a rest of at least 0.45 s inside the line (15–85 % of it), and sung time for rhythm uses the merged units — before this, "short detached notes" and "phrase break" fired on almost every real line. Each line's `cpu_tags` are included in the AI handoff.
 - **AI context `0.2.9-1`:** documents the vocabulary, the same-contour-same-tags rule and the lyric input rule; the stage-4 instructions say the same.
-- **Windows fix:** `tests/test_v02.js` wrote to a hard-coded `/tmp` and failed on Windows (found running the suite on Windows); it now uses the OS temp folder.
-- README: `audio-separator` example and a Windows PowerShell 5.1 quoting note for `--separator-args` (nested double quotes were dropped and the separator silently ran with its defaults).
+- **Windows fix:** `tests/test_v02.js` wrote to a hard-coded `/tmp` and failed on Windows (found running the suite on Ben's PC); it now uses the OS temp folder.
+- README: `audio-separator` example and a Windows PowerShell 5.1 quoting note for `--separator-args` (found in the real test: nested double quotes were dropped and the separator silently ran with its defaults).
 - Tests: new `tests/test_v029.js` (8 tests); headless guided check now pastes `[Belting]`/`(whispered)` and checks they do not reach the sheet. Suite total **123**. Version labels 0.2.9; schemas unchanged.
 
-## [0.2.8] — 2026-11 — CPU-first 4-stage chain, AI context file, providers, opt-in GPU hooks
+## v0.2.8 — CPU-first 4-stage chain, AI context file, providers, opt-in GPU hooks
 
 - **Guided 4-stage panel** (Place the original words → Draft the shape → Fit the new lyrics → Final tagged sheet). Per-stage Run buttons and status; **Run all** pauses for review after stages 1 and 2 (**Continue after review**). Every stage runs on the CPU alone; the AI options only replace stage 2 and/or stage 4 when enabled.
 - **AI stroke review.** AI-drafted strokes stay unconfirmed (`needs_review`) until **Confirm selected AI stroke** / **Confirm all AI strokes** (adds `ai_confirmed`). Stages 3–4 flag unconfirmed strokes (`ai_drafted_trace_not_confirmed` review reason, evidence `ai_drafted_trace_unconfirmed`), or leave them out with **Leave out unconfirmed AI strokes in stages 3–4** / `--exclude-unconfirmed-ai`. CLI `confirm`.
@@ -32,24 +113,24 @@ All notable changes to Song Shape. Versions follow `MAJOR.MINOR.PATCH`; the app 
 - **Tests:** new `tests/test_v028.js` (14 tests); `tests/headless_check.mjs` now runs the guided Run all (AI off) and checks the pauses and the tagged sheet. `tests/test_v026.js` / `test_v027.js` deliberately updated: Send now goes through `aiSheet` → `sendAndCheckSheet` → `sendAiChatAsync`. Suite total: **115**.
 - Version labels 0.2.8. Data schemas unchanged (`songshape-live-0.2`, visual-handoff 0.2.5; performance-map implementation version stays 0.2.5). Calibration examples unchanged; still to be removed before the public release.
 
-## [0.2.7] — 2026-11 — MP3, AI trace drafting, Apache-2.0
+## v0.2.7 — MP3, AI trace drafting, Apache-2.0
 
 - **MP3 loading (browser).** Open `.wav` or `.mp3`; both are decoded locally by the browser's built-in `decodeAudioData` (no libraries). New `SS.validateAudio` checks extension + RIFF/WAVE or ID3/MPEG-frame header; other formats are rejected with a clear message and the loaded song stays. New **Load demo MP3** button (embedded `demo/fictional_tone.mp3`, 34,707 bytes). The CLI `draft`/`analyze` stay WAV-only; the new AI commands accept MP3 through a user-supplied `--ffmpeg`.
 - **AI learns from your hand traces.** Under Connect your AI: pick finished hand traces as examples (current project and/or `.json` projects, max 5, memory only), click **Draft trace with AI**; the app measures the pitch contour locally, sends features + example strokes (no audio, no lyrics), and adds the reply as dashed magenta strokes tagged `ai_drafted_trace`/`needs_review` for correction by ear. Works zero-shot without examples. **Remove AI-drafted strokes** undoes it. Optional JSON mode and a 300 s timeout. Replies are validated (clamped, sorted, split at measured silences); nothing in a reply is executed.
 - **Batch CLI.** `ai-draft <audio>` and `ai-batch <folder> -o <new folder>` (`--examples`, `--examples-dir`, `--recursive`, `--ffmpeg`, `--limit`, `--resume`, `--json-mode`, `--timeout`). Writes one project per song plus `batch-log.jsonl` and a summary; never overwrites; non-local endpoints need `--allow-remote`; API keys only via `--api-key-env`.
 - **Local serving helper.** `Serve-Local.cmd` / `tools/serve-local.js` (loopback-only, read-only, no dependencies). Real-model testing showed Ollama's default CORS rejects `file://` pages; served over `http://127.0.0.1:8765/` it works with default Ollama settings. Error messages on `file://` now point to this.
-- **License and provenance.** Apache-2.0 `LICENSE`, `NOTICE` (credit Ben Hayward and AI Playground LLC), README credit-for-forks section, disclaimer ("no tracking, analytics, accounts or data collection …") in README, PRIVACY and an in-app **About** panel with repository and **Report a bug** links. The repository URL is defined once in `js/project-info.js`.
+- **License and provenance.** Apache-2.0 `LICENSE`, `NOTICE` (credit Ben Hayward and AI Playground LLC), README credit-for-forks section, disclaimer ("no tracking, analytics, accounts or data collection …") in README, PRIVACY and an in-app **About** panel with repository and **Report a bug** links. The repository URL `https://github.com/aiplayground226/song-shape` is a **PLACEHOLDER** defined once in `js/project-info.js`.
 - **Tests.** New `tests/test_v027.js` (11 tests). Two legacy assertions that MP3 must be rejected (`test_strokes.js`, `test_v02.js`) were deliberately updated to the new behavior. `tests/headless_check.mjs` now loads an MP3, rejects a bogus `.ogg`, and uses the demo-MP3 button. Suite total: 101. Real Ollama runs are logged in `verification/real_model_v0.2.7/`.
 - Version labels bumped to 0.2.7. Data schemas unchanged (`songshape-live-0.2`, visual-handoff 0.2.5).
 
-## [0.2.6] — 2026-11 — AI Send fix and AI Playground credit
+## v0.2.6 — AI Send fix and AI Playground credit
 
 - **Fixed:** "Send to my AI" posted `messages` as a plain string, which OpenAI-compatible servers (Ollama, LM Studio, llama.cpp, OpenAI) reject. `SS.sendAiChat` now normalizes input with the new `SS.toChatMessages()` into `[{role, content}]`, rejects malformed or empty input before any network call, sends `stream:false`, and uses `redirect:"error"` so a loopback endpoint cannot silently forward the request elsewhere. The Send button wraps the prompt as chat messages; Copy/Save mapping request still produce plain text.
 - **Added:** visible header credit "Song Shape, a free tool from AI Playground." with one plain link to [MTA Music Master](https://www.aiplayground.spot/music-master) (`target=_blank`, `rel="noopener noreferrer"`, `referrerpolicy="no-referrer"`). No images, scripts, prefetch or any request to the site unless the user clicks. Same credit in the README.
 - **Tests:** new `tests/test_v026.js` (4 tests) posts to a local loopback mock server and asserts the body is valid JSON with a non-empty `messages` array of `{role, content}`; it fails on v0.2.5 code and passes on v0.2.6. New optional `tests/network_probe.mjs` proves zero outbound requests at page load. Suite total: 90.
 - Version labels bumped to 0.2.6 (app, CLI `QUALITY_CHECK.json`, launcher text). Data schemas (`songshape-live-0.2`, `songshape-visual-handoff-0.2.5`, performance-map 0.2.5) are unchanged.
 
-## [0.2.5] — 2026-11 — Local Vocal Performance Translator
+## v0.2.5 — Local Vocal Performance Translator
 
 - Built on the preserved v0.2.4 source, remaining CPU-first and local by default.
 - Added audio-energy timing suggestions and a selected-loop next-line alignment helper, **not** a phonetic recognizer.
@@ -61,6 +142,6 @@ All notable changes to Song Shape. Versions follow `MAJOR.MINOR.PATCH`; the app 
 - Added 11 new unit/regression tests and an interactive browser test. No real-song accuracy validation yet.
 - No singer-conditioned separation, forced alignment engine, actual GPU processing, MP3 support or large-scale catalog implemented.
 
-## [0.2.4] — 2026-11
+## v0.2.4
 
-Earlier prototype versions (v0.1–v0.2.4) were not published.
+See prior release notes, which are preserved in `BUILD_NOTES.md` and v0.2.4 tests.

@@ -1,21 +1,14 @@
 {
   "schema_version": "songshape-visual-handoff-0.2.5",
   "task": "adapt_performance_tags_to_original_lyrics",
-  "instructions": "Preserve the new lyrics EXACTLY and preserve line breaks. The chart and events show expressive vocal movement, not a melody transcription. Compose concise performance tags for each lyric line and salient words: relative rises, descents, holds, dives and recoveries. Start from each line cpu_tags (the Song Shape vocabulary) and keep that vocabulary; lines sung the same way (same contour, e.g. a repeated chorus) keep the same tags; change tags only where the contour differs. Use one constant, user-selected lead singer. Never infer a singer change from movement or backing harmonies. Do not claim precise syllable alignment; if mismatched, propose alternatives and clearly flag fit issues. Do not invent breaths from unmarked gaps. Do not name or imitate the reference artist. Return two separate blocks: [Tagged lyrics] and [Style prompt], then [Uncertainties].",
+  "instructions": "Preserve the new lyrics EXACTLY and preserve line breaks. The chart and events show expressive vocal movement, not a melody transcription. Compose concise performance tags for each lyric line and salient words: relative rises, descents, holds, dives and recoveries. Use one constant, user-selected lead singer. Never infer a singer change from movement or backing harmonies. Do not claim precise syllable alignment; if mismatched, propose alternatives and clearly flag fit issues. Do not invent breaths from unmarked gaps. Do not name or imitate the reference artist. Return two separate blocks: [Tagged lyrics] and [Style prompt], then [Uncertainties].",
   "intended_lead_identity": "One consistent lead singer for all sung passages; same vocal timbre, character, and diction throughout. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.",
-  "original_new_lyrics": "[Verse]\nThe river calls me\nHome through the storm",
+  "original_new_lyrics": "[Verse]\nThe river calls me\nHome through the storm\n",
   "projected_lines": [
     {
       "text": "The river calls me",
       "status": "needs_review",
       "reference_duration_ms": 3210,
-      "cpu_tags": [
-        "rising line",
-        "upper-mid register",
-        "powerful",
-        "peak on \"me\""
-      ],
-      "same_tags_as_line": null,
       "projected_words": [
         {
           "word": "The",
@@ -168,14 +161,6 @@
       "text": "Home through the storm",
       "status": "needs_review",
       "reference_duration_ms": 1665,
-      "cpu_tags": [
-        "falling line",
-        "mid register",
-        "steady intensity",
-        "peak on \"Home\"",
-        "dive at the end"
-      ],
-      "same_tags_as_line": null,
       "projected_words": [
         {
           "word": "Home",
@@ -298,7 +283,6 @@
   "caveats": "Estimated target-word positions are proportional syllable mapping, not word timing from target audio. Trace height is perceived delivery; measured-pitch drafts are separate. An unmarked gap does not establish a breath or silence. The generator may disregard or reinterpret vocal tags. Review before sharing.",
   "warnings": [
     "Unassigned strokes are retained, not converted into extra lyric phrases.",
-    "New lyrics: 1 [bracket] tag(s) ignored. Song Shape writes its own tags.",
     "word_or_line_count_mismatch",
     "reference_group_needs_review",
     "target_word_count_differs_from_reference",

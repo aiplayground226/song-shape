@@ -60,7 +60,7 @@
   function withAiContext(messages) {
     var ctx = getAiContext();
     if (!ctx || !Array.isArray(messages)) return messages;
-    var out = messages.map(function (m) { return { role: m.role, content: m.content }; });
+    var out = messages.map(function (m) { return Object.assign({}, m); }); // v0.2.11: keep tool_call fields
     if (out.length && out[0].role === "system") {
       if (out[0].content.indexOf(ctx) !== 0) out[0].content = ctx + "\n\n---\nTASK\n" + out[0].content;
     } else {
@@ -369,7 +369,8 @@
     "[Tagged lyrics] must contain every line of the new lyrics, unchanged and in order, with the section tags kept,",
     "one [Global Vocal Direction: ...] line at the top (copy the handoff's text in full) and at most one short [Delivery: ...] tag before a lyric line.",
     "Section tags such as [Verse] stay on their own line; never merge them into the [Delivery: ...] tag.",
-    "Use the Song Shape delivery vocabulary and start from each line's cpu_tags; lines with the same contour get the same tags (a repeated chorus repeats its tags); change tags only where the contour differs."
+    "Use the Song Shape delivery vocabulary and start from each line's cpu_tags; lines with the same contour get the same tags (a repeated chorus repeats its tags); change tags only where the contour differs.",
+    "When the handoff lists sections, keep each section's tag and its [Vocal style: ...] line right under it, as given; new sections keep the style they inherit."
   ].join(" ");
 
   function buildSheetMessages(handoffPrompt) {
@@ -416,7 +417,8 @@
   /** Promise wrapper around sendAiChat (context is added inside sendAiChat). */
   function sendAiChatAsync(messages, opts) {
     return new Promise(function (resolve, reject) {
-      S().sendAiChat(messages, function (err, text) { if (err) reject(err); else resolve(text); }, opts);
+      // v0.2.11: with opts.tools the reply is {text, tool_calls} (OpenAI-compatible tool calling).
+      S().sendAiChat(messages, function (err, text, extra) { if (err) reject(err); else resolve(opts && opts.tools ? { text: text, tool_calls: extra && extra.tool_calls } : text); }, opts);
     });
   }
 

@@ -1,6 +1,6 @@
 {
   "schema_version": "songshape-live-0.2",
-  "app_version": "0.2.9",
+  "app_version": "0.2.5",
   "method": "manual_listener_trace",
   "y_semantics": "subjective_vocal_delivery_relative_to_singer_baseline",
   "y_units": "normalized_relative",
@@ -785,7 +785,7 @@
     }
   ],
   "lyrics": {
-    "text": "[Verse]\nThe fire rises\nThen we return",
+    "text": "[Verse]\nThe fire rises\nThen we return\n",
     "lines": [
       {
         "id": "line-1",
@@ -815,6 +815,13 @@
           "word-5",
           "word-6"
         ]
+      },
+      {
+        "id": "line-4",
+        "index": 3,
+        "text": "",
+        "kind": "blank",
+        "word_ids": []
       }
     ],
     "words": [

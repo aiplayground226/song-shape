@@ -1,4 +1,5 @@
 @echo off
-rem Song Shape: open the app in your default browser.
-rem No server and no Python required. You can also double-click index.html.
-start "" "%~dp0index.html"
+rem Song Shape v0.2.11: the one launcher. Checks the shared tools in SongShape_Tools, starts the local
+rem helper (127.0.0.1 only) and opens the app. Without the tools it opens the app alone.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launch\Start-SongShape.ps1"
+pause

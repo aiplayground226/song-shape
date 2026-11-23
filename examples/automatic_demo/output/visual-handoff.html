@@ -40,29 +40,23 @@
 <text x="40" y="474" fill="#64748b" font-size="12">Teal = human expressive trace; dashed purple = computer-measured frequency; grey = relative baseline. No source audio.</text></svg></section><section><h2>Locally drafted lyric tags</h2><pre>[Global Vocal Direction: One consistent lead singer for all sung passages; same vocal timbre, character, and diction throughout. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.]
 
 [Verse]
-[Delivery: rising line; upper-mid register; powerful; peak on &quot;me&quot;]
+[Delivery: begin below baseline; rise on &quot;river&quot;; rise on &quot;calls&quot;; hold on &quot;me&quot;]
 The river calls me
-[Delivery: falling line; mid register; steady intensity; peak on &quot;Home&quot;; dive at the end]
-Home through the storm</pre></section><section><h2>Copy/paste into your chosen AI</h2><p class="note">The AI request contains your replacement lyrics and contour events. Review before transmitting to an outside provider.</p><pre>You are adapting vocal delivery tags for MY ORIGINAL lyrics. This is a visual/structured contour reference, not a request to copy the original voice or melody.
+[Delivery: begin above baseline; descend on &quot;Home&quot;; descend on &quot;through&quot;; dip below baseline on &quot;the&quot;; descend on &quot;storm&quot;]
+Home through the storm
+</pre></section><section><h2>Copy/paste into your chosen AI</h2><p class="note">The AI request contains your replacement lyrics and contour events. Review before transmitting to an outside provider.</p><pre>You are adapting vocal delivery tags for MY ORIGINAL lyrics. This is a visual/structured contour reference, not a request to copy the original voice or melody.
 
 {
   &quot;schema_version&quot;: &quot;songshape-visual-handoff-0.2.5&quot;,
   &quot;task&quot;: &quot;adapt_performance_tags_to_original_lyrics&quot;,
-  &quot;instructions&quot;: &quot;Preserve the new lyrics EXACTLY and preserve line breaks. The chart and events show expressive vocal movement, not a melody transcription. Compose concise performance tags for each lyric line and salient words: relative rises, descents, holds, dives and recoveries. Start from each line cpu_tags (the Song Shape vocabulary) and keep that vocabulary; lines sung the same way (same contour, e.g. a repeated chorus) keep the same tags; change tags only where the contour differs. Use one constant, user-selected lead singer. Never infer a singer change from movement or backing harmonies. Do not claim precise syllable alignment; if mismatched, propose alternatives and clearly flag fit issues. Do not invent breaths from unmarked gaps. Do not name or imitate the reference artist. Return two separate blocks: [Tagged lyrics] and [Style prompt], then [Uncertainties].&quot;,
+  &quot;instructions&quot;: &quot;Preserve the new lyrics EXACTLY and preserve line breaks. The chart and events show expressive vocal movement, not a melody transcription. Compose concise performance tags for each lyric line and salient words: relative rises, descents, holds, dives and recoveries. Use one constant, user-selected lead singer. Never infer a singer change from movement or backing harmonies. Do not claim precise syllable alignment; if mismatched, propose alternatives and clearly flag fit issues. Do not invent breaths from unmarked gaps. Do not name or imitate the reference artist. Return two separate blocks: [Tagged lyrics] and [Style prompt], then [Uncertainties].&quot;,
   &quot;intended_lead_identity&quot;: &quot;One consistent lead singer for all sung passages; same vocal timbre, character, and diction throughout. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.&quot;,
-  &quot;original_new_lyrics&quot;: &quot;[Verse]\nThe river calls me\nHome through the storm&quot;,
+  &quot;original_new_lyrics&quot;: &quot;[Verse]\nThe river calls me\nHome through the storm\n&quot;,
   &quot;projected_lines&quot;: [
     {
       &quot;text&quot;: &quot;The river calls me&quot;,
       &quot;status&quot;: &quot;needs_review&quot;,
       &quot;reference_duration_ms&quot;: 3210,
-      &quot;cpu_tags&quot;: [
-        &quot;rising line&quot;,
-        &quot;upper-mid register&quot;,
-        &quot;powerful&quot;,
-        &quot;peak on \&quot;me\&quot;&quot;
-      ],
-      &quot;same_tags_as_line&quot;: null,
       &quot;projected_words&quot;: [
         {
           &quot;word&quot;: &quot;The&quot;,
@@ -215,14 +209,6 @@ Home through the storm</pre></section><section><h2>Copy/paste into your chosen A
       &quot;text&quot;: &quot;Home through the storm&quot;,
       &quot;status&quot;: &quot;needs_review&quot;,
       &quot;reference_duration_ms&quot;: 1665,
-      &quot;cpu_tags&quot;: [
-        &quot;falling line&quot;,
-        &quot;mid register&quot;,
-        &quot;steady intensity&quot;,
-        &quot;peak on \&quot;Home\&quot;&quot;,
-        &quot;dive at the end&quot;
-      ],
-      &quot;same_tags_as_line&quot;: null,
       &quot;projected_words&quot;: [
         {
           &quot;word&quot;: &quot;Home&quot;,
@@ -345,7 +331,6 @@ Home through the storm</pre></section><section><h2>Copy/paste into your chosen A
   &quot;caveats&quot;: &quot;Estimated target-word positions are proportional syllable mapping, not word timing from target audio. Trace height is perceived delivery; measured-pitch drafts are separate. An unmarked gap does not establish a breath or silence. The generator may disregard or reinterpret vocal tags. Review before sharing.&quot;,
   &quot;warnings&quot;: [
     &quot;Unassigned strokes are retained, not converted into extra lyric phrases.&quot;,
-    &quot;New lyrics: 1 [bracket] tag(s) ignored. Song Shape writes its own tags.&quot;,
     &quot;word_or_line_count_mismatch&quot;,
     &quot;reference_group_needs_review&quot;,
     &quot;target_word_count_differs_from_reference&quot;,
@@ -359,7 +344,6 @@ Home through the storm</pre></section><section><h2>Copy/paste into your chosen A
 
 The picture (if attached) shows the same contours. If you cannot view it, use the structured events. Preserve every lyric word exactly.</pre></section><section><h2>Uncertainty</h2><pre>Estimated target-word positions are proportional syllable mapping, not word timing from target audio. Trace height is perceived delivery; measured-pitch drafts are separate. An unmarked gap does not establish a breath or silence. The generator may disregard or reinterpret vocal tags. Review before sharing.
 Unassigned strokes are retained, not converted into extra lyric phrases.
-New lyrics: 1 [bracket] tag(s) ignored. Song Shape writes its own tags.
 word_or_line_count_mismatch
 reference_group_needs_review
 target_word_count_differs_from_reference

@@ -1,0 +1,178 @@
+{
+  "schema_version": "songshape-live-0.2",
+  "app_version": "0.2.0",
+  "method": "manual_listener_trace",
+  "y_semantics": "subjective_vocal_delivery_relative_to_singer_baseline",
+  "y_units": "normalized_relative",
+  "audio": {
+    "name": "",
+    "included_in_export": false,
+    "duration_ms": 4000
+  },
+  "baseline": {
+    "y": 0,
+    "defined_by": "annotator"
+  },
+  "timing_offset_ms": 0,
+  "phrases": [],
+  "sections": [],
+  "strokes": [
+    {
+      "id": "stroke-rise",
+      "phrase_id": null,
+      "start_ms": 0,
+      "end_ms": 900,
+      "points": [
+        [
+          0,
+          -0.35
+        ],
+        [
+          400,
+          0.1
+        ],
+        [
+          900,
+          0.55
+        ]
+      ],
+      "annotations": [],
+      "section": "Chorus",
+      "word_id": "word-1"
+    },
+    {
+      "id": "stroke-hold",
+      "phrase_id": null,
+      "start_ms": 900,
+      "end_ms": 1800,
+      "points": [
+        [
+          900,
+          0.55
+        ],
+        [
+          1400,
+          0.58
+        ],
+        [
+          1800,
+          0.52
+        ]
+      ],
+      "annotations": [],
+      "section": "Chorus",
+      "word_id": "word-1"
+    },
+    {
+      "id": "stroke-pickup",
+      "phrase_id": null,
+      "start_ms": 2200,
+      "end_ms": 2600,
+      "points": [
+        [
+          2200,
+          0.15
+        ],
+        [
+          2600,
+          0.45
+        ]
+      ],
+      "annotations": [],
+      "section": "Chorus",
+      "word_id": "word-1"
+    },
+    {
+      "id": "stroke-descent",
+      "phrase_id": null,
+      "start_ms": 2600,
+      "end_ms": 3600,
+      "points": [
+        [
+          2600,
+          0.45
+        ],
+        [
+          3100,
+          0.1
+        ],
+        [
+          3600,
+          -0.4
+        ]
+      ],
+      "annotations": [],
+      "section": "Chorus",
+      "word_id": "word-1"
+    }
+  ],
+  "gaps": [
+    {
+      "start_ms": 1800,
+      "end_ms": 2200,
+      "duration_ms": 400,
+      "label": "unlabeled_gap",
+      "breath": "unknown"
+    }
+  ],
+  "lyrics": {
+    "text": "honor",
+    "lines": [
+      {
+        "id": "line-1",
+        "index": 0,
+        "text": "honor",
+        "kind": "lyric",
+        "word_ids": [
+          "word-1"
+        ]
+      }
+    ],
+    "words": [
+      {
+        "id": "word-1",
+        "line_id": "line-1",
+        "index": 0,
+        "text": "honor",
+        "skipped": false
+      }
+    ]
+  },
+  "anchors": [
+    {
+      "id": "anchor-1",
+      "word_id": "word-1",
+      "line_id": "line-1",
+      "word_ids": [
+        "word-1"
+      ],
+      "kind": "word",
+      "start_ms": 0,
+      "end_ms": 3600,
+      "anchor_ms": 0,
+      "stroke_id": "stroke-rise",
+      "stroke_ids": [
+        "stroke-rise",
+        "stroke-hold",
+        "stroke-pickup",
+        "stroke-descent"
+      ],
+      "needs_review": false,
+      "harmony": false,
+      "source": "next_word",
+      "group_id": "group-1"
+    }
+  ],
+  "draft": null,
+  "reference": {
+    "title": "What Color Is My Honor?",
+    "artist": ""
+  },
+  "active_word_id": "word-1",
+  "harmony_ranges": [],
+  "performer": {
+    "identity": "One consistent lead singer for all sung passages; same vocal timbre, character, and diction throughout. Intensity, register, sustain, dynamics, and expression may vary naturally. No unexpected additional singer, duet, choir handoff, or voice-character change.",
+    "allow_harmony": false
+  },
+  "notes": "Quick-start: the word “honor” is placed once and owns several gestures (rise, hold, a gap, pickup, descent). The gap is unlabeled. Tracing did not place the word."
+}

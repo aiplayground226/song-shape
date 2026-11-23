@@ -3,14 +3,19 @@
 (function(root){
 'use strict';
 const SS = (typeof module !== 'undefined' && module.exports) ? require('./align-assist.js') : (root.SongShape || {});
-if (typeof module !== 'undefined' && module.exports) Object.assign(SS, require('./cpu-tags.js'));
+if (typeof module !== 'undefined' && module.exports) Object.assign(SS, require('./cpu-tags.js'), require('./vocal-range.js'));
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const numeric=x=>typeof x==='number' && Number.isFinite(x);
 const round=x=>Math.round(x * 1000)/1000;
+// v0.2.11 fix7: fit notes are reported but never block a line; a count difference beyond the tolerance does.
+const FIT_NOTES=['target_word_count_differs_from_reference','word_count_differs_within_tolerance'];
+const tolerance=n=>SS.wordCountTolerance?SS.wordCountTolerance(n):Math.max(1,Math.round(0.35*(n||0)));
 function wordProjection(map, transfer) {
   const anchors = new Map(map.anchors.map(a=>[a.word_id,a]));
-  return transfer.rows.map(row => {
+  const counts=transfer.rows.map(row=>transfer.parsed_lyrics.words.filter(w=>w.line_id===row.line_id).length);
+  const runWords=SS.splitRunWords?SS.splitRunWords(transfer.rows.map(r=>r.reference_group_ids),counts):counts;
+  return transfer.rows.map((row,rowI) => {
     const targetWords = transfer.parsed_lyrics.words.filter(w=>w.line_id===row.line_id);
     const groups = row.reference_group_ids.map(id=>map.groups.find(g=>g.id===id)).filter(Boolean);
     const groupRanges = groups.filter(g=>numeric(g.start_ms)&&numeric(g.end_ms)&&g.end_ms>g.start_ms);
@@ -49,15 +54,18 @@ function wordProjection(map, transfer) {
     const knownRefs=refWords.filter(id=>anchors.has(id)).length;
     const warnings=row.reasons.slice();
     if(!duration) warnings.push('reference_line_duration_unknown');
-    if(refWords.length!==targetWords.length) warnings.push('target_word_count_differs_from_reference');
+    if(refWords.length!==targetWords.length) warnings.push(Math.abs(refWords.length-targetWords.length)>tolerance(refWords.length)&&Math.abs(refWords.length-runWords[rowI])>tolerance(refWords.length)?'word_or_line_count_mismatch':'target_word_count_differs_from_reference');
     if(knownRefs<refWords.length) warnings.push('reference_word_timing_incomplete');
-    if(groups.some(g=>g.anchor_ids.some(id=>map.anchors.some(a=>a.id===id && a.needs_review)))) warnings.push('reference_anchor_estimates_need_confirmation');
+    // v0.2.11 fix7: machine-estimated word times are one global caveat (payload.estimate_caveat), not a per-line flag.
+    const estimated=groups.some(g=>g.anchor_ids.some(id=>map.anchors.some(a=>a.id===id && a.needs_review)));
     // Explicitly no target audio time: projected locations are a songwriting suggestion.
-    return {line_id:row.line_id,text:row.text,status:warnings.length?'needs_review':row.status,
+    // v0.2.11: a different word count is a fit note (new lyrics usually differ), not a timing problem.
+    const blocking=warnings.filter(w=>FIT_NOTES.indexOf(w)<0);
+    return {line_id:row.line_id,text:row.text,status:blocking.length?'needs_review':(row.status==='needs_review'&&!blocking.length?'line_level_draft':row.status),fit_notes:warnings.filter(w=>FIT_NOTES.indexOf(w)>=0),
       reference_group_ids:row.reference_group_ids,reference_word_count:refWords.length,
       reference_words_timed:knownRefs,source_duration_ms:round(duration),
       projected_words:spans,events:events,
-      warnings:[...new Set(warnings)],
+      warnings:[...new Set(warnings)],reference_words_estimated:estimated,
       projection_method:'syllable_weighted_proportion_NOT_acoustic_target_word_alignment'};
   });
 }
@@ -98,8 +106,45 @@ function rowFeatures(map, row) {
   }
   const f=SS.lineFeatures(segs,{start_ms:0,end_ms:offset,word_count:words,gaps});
   if(!f) return null;
+  if(map.vocal_range&&SS.applyVocalRange) SS.applyVocalRange(f,map.vocal_range);
   f.peak_rel=round(clamp(f.peak_ms/offset,0,1));f.hold_rel=round(clamp(f.hold_at_ms/offset,0,1));
   return f;
+}
+// v0.2.11 fix7: very short lines (1-2 words). A short line that the user split off a longer sung line (same
+// reference line(s) as the line before) has no tag of its own: the line before carries it. Any other short
+// line keeps only the essentials: direction, register, a hold and a peak.
+const SHORT_LINE_WORDS=2;
+const ESSENTIAL_CUE=/^(rising line|falling line|rise then fall|dip then recover|up-and-down line|level line|[a-z-]+ register|long sustained note|held note|peak on)\b/i;
+function shortLinePolicy(rows){
+  const count=t=>String(t||'').split(/\s+/).filter(Boolean).length;
+  const same=(a,b)=>a.length>0&&a.length===b.length&&a.every((x,i)=>x===b[i]);
+  rows.forEach((r,i)=>{
+    if(count(r.text)>SHORT_LINE_WORDS||!r.cpu_tags.length) return;
+    let head=i-1;while(head>=0&&rows[head].merged_with_line!=null) head=rows[head].merged_with_line-1;
+    if(i>0&&same(r.reference_group_ids,rows[i-1].reference_group_ids)&&head>=0){
+      r.short_line={rule:'merged_with_previous_line',from:r.cpu_tags.slice()};r.merged_with_line=head+1;r.cpu_tags=[];return;}
+    const kept=r.cpu_tags.filter(c=>ESSENTIAL_CUE.test(c));
+    if(kept.length&&kept.length<r.cpu_tags.length){r.short_line={rule:'trimmed_to_essentials',from:r.cpu_tags.slice()};r.cpu_tags=kept;}
+  });
+  return rows;
+}
+// v0.2.11 fix7: a section's [Vocal style] pace must not contradict its own lines. Most lines rapid -> quick
+// phrasing; most lines spacious -> slow, spacious phrasing; otherwise a pace term that any line contradicts is dropped.
+const PACE=/^(slow, spacious phrasing|moderate pace|quick phrasing)$/i;
+function reconcileSectionStyle(style, lineCues){
+  if(!style||!/^\[Vocal style:/.test(style)) return style;
+  const items=style.replace(/^\[Vocal style:\s*/,'').replace(/\]$/,'').split('; ');
+  const tagged=lineCues.filter(c=>c&&c.length);
+  if(!tagged.length) return style;
+  const rapid=tagged.filter(c=>c.includes('rapid phrasing')).length, spacious=tagged.filter(c=>c.includes('slow, spacious phrasing')).length;
+  const at=items.findIndex(it=>PACE.test(it));
+  let pace=at>=0?items[at]:null;
+  if(rapid>tagged.length/2) pace='quick phrasing';
+  else if(spacious>tagged.length/2) pace='slow, spacious phrasing';
+  else if(pace&&((/slow/i.test(pace)&&rapid)||(/quick/i.test(pace)&&spacious))) pace=null;
+  const out=items.filter(it=>!PACE.test(it));
+  if(pace) out.splice(at>=0?at:(out[0]==='wordless vocalise'?1:0),0,pace);
+  return out.length?'[Vocal style: '+out.join('; ')+']':null;
 }
 function makeHandoff(map, transfer) {
   const rows=wordProjection(map,transfer);
@@ -107,28 +152,59 @@ function makeHandoff(map, transfer) {
   const lines=['[Global Vocal Direction: '+identity+']',''];
   // v0.2.9: CPU tags from each line's contour features; repeated lines with the same contour keep the same tags.
   const tagRows=rows.map(r=>{const f=rowFeatures(map,r);return {text:r.text,features:f,cues:f?SS.cpuLineCues(f,r.projected_words):lineCues(r)};});
-  if(SS.applyRepeatConsistency) SS.applyRepeatConsistency(tagRows,0.15);
+  if(SS.applyRepeatConsistency) SS.applyRepeatConsistency(tagRows,SS.CPU_TAG_REPEAT_TOLERANCE!=null?SS.CPU_TAG_REPEAT_TOLERANCE:0.7);
+  // v0.2.11: a line with no measured contour reuses the tags of the same line sung elsewhere (same words).
+  const normText=t=>String(t||'').toLowerCase().replace(/(\w)-(\w)/g,'$1$2').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+  tagRows.forEach((t,i)=>{ if(t.cues.length) return; const j=tagRows.findIndex((o,k)=>k!==i&&o.cues.length&&o.features&&normText(o.text)===normText(t.text)); if(j>=0){t.cues=tagRows[j].cues.slice();t.repeat_of=j;} });
   rows.forEach((r,i)=>{r.cpu_tags=tagRows[i].cues.slice();r.contour_features=tagRows[i].features;r.tags_repeat_of_line=tagRows[i].repeat_of;});
-  let rowIndex=0;
+  shortLinePolicy(rows);
+  // v0.2.11 fix6d: Lift (optional, Step 2): rows of new sections get stepped-up tags; the final line of each most.
+  const liftSet=new Set(transfer.lift&&Array.isArray(transfer.lift_sections)?transfer.lift_sections:[]);
+  if(liftSet.size&&SS.liftCues&&Array.isArray(transfer.block_section)){
+    let bi=-1,ri=0;const rowSec=[];
+    for(const ln of transfer.parsed_lyrics.lines){if(ln.kind==='tag'){bi++;continue;}if(ln.kind==='blank')continue;rowSec[ri++]=transfer.block_section[bi];}
+    rows.forEach((r,i)=>{const sec=rowSec[i];if(!liftSet.has(sec)||r.merged_with_line!=null)return;
+      const final=rowSec[i+1]!==sec;const words=String(r.text||'').split(/\s+/).filter(Boolean);const lastWord=words.length?words[words.length-1]:null;
+      const before=r.cpu_tags.slice();r.cpu_tags=SS.liftCues(before,{final,lastWord});r.lift={section_index:sec,final_line:final,from:before,to:r.cpu_tags.slice()};});
+  }
+  let rowIndex=0,blockIndex=-1;
+  // v0.2.11 fix6 (Extend): section headers and per-section style tags from the section map, when given.
+  let heads=Array.isArray(transfer.section_headers)?transfer.section_headers:null;
+  // v0.2.11 fix7: section style pace agrees with the section's own line tags (header and section_plan both).
+  if(heads&&Array.isArray(transfer.block_section)){
+    const secRows={};let bi=-1,ri=0;
+    for(const ln of transfer.parsed_lyrics.lines){if(ln.kind==='tag'){bi++;continue;}if(ln.kind==='blank')continue;const sec=transfer.block_section[Math.max(0,bi)];(secRows[sec]=secRows[sec]||[]).push(rows[ri++]);}
+    heads=heads.map((h,b)=>{if(!h||h.continue||!h.style)return h;const sec=transfer.block_section[b];const st=reconcileSectionStyle(h.style,(secRows[sec]||[]).map(r=>r.cpu_tags));return st===h.style?h:Object.assign({},h,{style:st,style_before_reconcile:h.style});});
+    if(Array.isArray(transfer.section_plan)) transfer.section_plan.forEach(p=>{if(!p||!p.style_tag)return;const st=reconcileSectionStyle(p.style_tag,(secRows[p.index]||[]).map(r=>r.cpu_tags));if(st!==p.style_tag){p.style_tag_before_reconcile=p.style_tag;p.style_tag=st;}});
+  }
   for(const ln of transfer.parsed_lyrics.lines) {
     if(ln.kind==='blank'){lines.push('');continue;}
-    if(ln.kind==='tag'){if(/^\[(Verse|Chorus)\]$/.test(ln.text))lines.push(ln.text);continue;}
+    if(ln.kind==='tag'){blockIndex++;const h=heads&&heads[blockIndex];
+      if(h&&h.continue){if(lines.length&&lines[lines.length-1]!=='')lines.push('');}
+      else if(h){lines.push(h.header);if(h.style)lines.push(h.style);}
+      else if(/^\[(Verse|Chorus)\]$/.test(ln.text))lines.push(ln.text);continue;}
     const row=rows[rowIndex++];const cues=row.cpu_tags;
     if(cues.length) lines.push('[Delivery: '+cues.join('; ')+']');
     if(map.groups.some(g=>row.reference_group_ids.includes(g.id)&&g.harmony)) lines.push('[Backing harmonies support the same lead]');
+    // v0.2.11 fix6e: a detected (not user-marked) harmony section; the Suno budget keeps it only if there is room left.
+    else if(map.groups.some(g=>row.reference_group_ids.includes(g.id)&&(g.detected_harmony||[]).length)) lines.push('[Backing harmony]');
     lines.push(ln.text);
   }
   const warnings=[...new Set([...transfer.warnings,...rows.flatMap(r=>r.warnings)])];
+  const nEstimated=rows.filter(r=>r.reference_words_estimated).length;
+  const estimateCaveat=nEstimated?'The reference word positions under '+nEstimated+' of '+rows.length+' line(s) are machine estimates (aligner, CPU timing or your taps), not hand-checked. Treat word-level timing as approximate everywhere; lines marked needs_review have a specific problem listed in their warnings.':null;
   const info='Estimated target-word positions are proportional syllable mapping, not word timing from target audio. '
     +'Trace height is perceived delivery; measured-pitch drafts are separate. '
     +'An unmarked gap does not establish a breath or silence. '
-    +'The generator may disregard or reinterpret vocal tags. Review before sharing.';
+    +'The generator may disregard or reinterpret vocal tags. Review before sharing.'+(estimateCaveat?' '+estimateCaveat:'');
   const payload={schema_version:'songshape-visual-handoff-0.2.5',task:'adapt_performance_tags_to_original_lyrics',
     instructions:'Preserve the new lyrics EXACTLY and preserve line breaks. The chart and events show expressive vocal movement, not a melody transcription. Compose concise performance tags for each lyric line and salient words: relative rises, descents, holds, dives and recoveries. Start from each line cpu_tags (the Song Shape vocabulary) and keep that vocabulary; lines sung the same way (same contour, e.g. a repeated chorus) keep the same tags; change tags only where the contour differs. Use one constant, user-selected lead singer. Never infer a singer change from movement or backing harmonies. Do not claim precise syllable alignment; if mismatched, propose alternatives and clearly flag fit issues. Do not invent breaths from unmarked gaps. Do not name or imitate the reference artist. Return two separate blocks: [Tagged lyrics] and [Style prompt], then [Uncertainties].',
     intended_lead_identity:identity,original_new_lyrics:transfer.original_lyrics,
     projected_lines:rows.map(r=>({text:r.text,status:r.status,reference_duration_ms:r.source_duration_ms,cpu_tags:r.cpu_tags,same_tags_as_line:r.tags_repeat_of_line==null?null:r.tags_repeat_of_line+1,
+      merged_with_line:r.merged_with_line==null?null:r.merged_with_line,short_line_rule:r.short_line?r.short_line.rule:null,
       projected_words:r.projected_words,events:r.events,warnings:r.warnings})),
-    caveats:info,warnings,contains_reference_audio:false,contains_reference_lyric_text:false,
+    sections:Array.isArray(transfer.section_plan)?transfer.section_plan:null,
+    caveats:info,estimate_caveat:estimateCaveat,warnings,contains_reference_audio:false,contains_reference_lyric_text:false,
     contains_source_artist:false,network_transmitted:false};
   const prompt='You are adapting vocal delivery tags for MY ORIGINAL lyrics. This is a visual/structured contour reference, not a request to copy the original voice or melody.\n\n'
     +JSON.stringify(payload,null,2)+'\n\nThe picture (if attached) shows the same contours. If you cannot view it, use the structured events. '
@@ -203,7 +279,7 @@ function htmlReport(map, handoff) {
     '<section><h2>Copy/paste into your chosen AI</h2><p class="note">The AI request contains your replacement lyrics and contour events. Review before transmitting to an outside provider.</p><pre>'+esc(handoff.prompt)+'</pre></section>'+
     '<section><h2>Uncertainty</h2><pre>'+esc(handoff.caveats+'\n'+handoff.warnings.join('\n'))+'</pre></section></main></html>';
 }
-const api={wordProjection,makeHandoff,svgPicture,htmlReport};
+const api={wordProjection,makeHandoff,svgPicture,htmlReport,reconcileSectionStyle,shortLinePolicy};
 root.SongShape=Object.assign(root.SongShape||{},api);
 if(typeof module!=='undefined'&&module.exports)module.exports=Object.assign(SS,api);
 })(typeof globalThis!=='undefined'?globalThis:this);

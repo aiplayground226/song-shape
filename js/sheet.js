@@ -2,7 +2,7 @@
  * Song Shape v0.2 — rule-based Suno lyric-sheet export.
  * Works WITHOUT an AI connection. Uses anchored words, remembered line
  * breaks, and the shape of the (hand) trace to insert short delivery cues
- * in a line-directed style: one global vocal direction, section
+ * in the Honor / line-directed style: one global vocal direction, section
  * tags, and short per-line cues (start softly, rise, hold, break here,
  * plunge, step down).
  *
@@ -75,7 +75,7 @@
     return cues;
   }
 
-  function lineTagForCue(cue) {
+  function honorTagForCue(cue) {
     if (cue === "rise") return "[Rising pitch]";
     if (cue === "drop" || cue === "plunge") return "[Pitch drop]";
     return null;
@@ -166,7 +166,7 @@
       var cues = cueForStroke(session, stroke, gap);
       var c;
       for (c = 0; c < cues.length; c += 1) {
-        var tag = lineTagForCue(cues[c]);
+        var tag = honorTagForCue(cues[c]);
         if (tag && !usedCues[tag + i]) {
           linesOut.push(tag);
           usedCues[tag + i] = true;

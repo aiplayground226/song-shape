@@ -11,15 +11,10 @@
       "y": 0,
       "defined_by": "annotator"
     },
-    "gap_cause_default": "unknown",
-    "ai_strokes": {
-      "total": 0,
-      "unconfirmed": 0,
-      "unconfirmed_excluded": false
-    }
+    "gap_cause_default": "unknown"
   },
   "reference_lyrics": {
-    "text": "[Verse]\nThe fire rises\nThen we return",
+    "text": "[Verse]\nThe fire rises\nThen we return\n",
     "lines": [
       {
         "id": "line-1",
@@ -49,6 +44,13 @@
           "word-5",
           "word-6"
         ]
+      },
+      {
+        "id": "line-4",
+        "index": 3,
+        "text": "",
+        "kind": "blank",
+        "word_ids": []
       }
     ],
     "words": [
@@ -2602,8 +2604,7 @@
   "export_heuristics": {
     "simplifyTolerance": 0.035,
     "holdTolerance": 0.08,
-    "minimumHoldMs": 120,
-    "excludeUnconfirmedAi": false
+    "minimumHoldMs": 120
   },
   "warnings": [
     "Unassigned strokes are retained, not converted into extra lyric phrases."

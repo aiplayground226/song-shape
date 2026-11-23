@@ -1,58 +1,18 @@
 {
-  "version": "0.2.9",
+  "version": "0.2.5",
   "input_audio_uploaded": false,
   "total_source_words": 6,
   "total_anchors": 6,
   "machine_pitch_strokes": 3,
-  "ai_drafted_strokes": 0,
-  "ai_unconfirmed_strokes": 0,
-  "ai_unconfirmed_excluded": false,
   "source_word_timings_verified": false,
   "lead_voice_identity_verified": false,
   "review_lines": 2,
   "warnings": [
     "Unassigned strokes are retained, not converted into extra lyric phrases.",
-    "New lyrics: 1 [bracket] tag(s) ignored. Song Shape writes its own tags.",
     "word_or_line_count_mismatch",
     "reference_group_needs_review",
     "target_word_count_differs_from_reference",
     "reference_anchor_estimates_need_confirmation"
   ],
-  "limits": "Energy timing is NOT forced alignment; measured frequency is NOT subjective intensity. Singers in harmony may confuse F0. Target syllable fits are drafts. AI strokes are proposals until confirmed.",
-  "chain": {
-    "stages": {
-      "place_words": {
-        "source": "cpu_energy_estimate",
-        "anchors": 6,
-        "words": 6,
-        "added": 6
-      },
-      "draft_shape": {
-        "mode": "cpu",
-        "strokes": 3
-      },
-      "fit_lyrics": {
-        "lines": 2,
-        "review_lines": 2
-      },
-      "final_sheet": {
-        "cpu_sheet": "tagged-lyrics.txt",
-        "ai_sheet": "off"
-      }
-    },
-    "lyric_input": {
-      "new_lyrics": {
-        "ignored_tags": 1,
-        "stripped_cues": 0,
-        "ambiguous": []
-      },
-      "original_lyrics": {
-        "ignored_tags": 1,
-        "stripped_cues": 0,
-        "ambiguous": []
-      }
-    },
-    "duration_ms": 6500,
-    "total_ms": 205
-  }
+  "limits": "Energy timing is NOT forced alignment; measured frequency is NOT subjective intensity. Singers in harmony may confuse F0. Target syllable fits are drafts."
 }
